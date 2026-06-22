@@ -10,7 +10,7 @@ warnings.filterwarnings("ignore")
 
 def get_all_tw_tickers():
     """
-    獲取上市櫃股票代號與名稱字典，並排除非正規代號
+    獲取上市櫃股票代號與名稱字典，強制過濾非4碼與非數字代號
     """
     tickers = {}
     try:
@@ -22,18 +22,17 @@ def get_all_tw_tickers():
             
             df.columns = df.iloc[0]
             df = df.iloc[1:]
-            df = df.dropna(thresh=3, axis=0).dropna(how='all', axis=1)
             
-            stock_data = df['有價證券代號及名稱'].str.split('　', expand=True)
-            if len(stock_data.columns) >= 2:
-                # 嚴格過濾：長度為4且為純數字
-                mask = (stock_data[0].str.len() == 4) & (stock_data[0].str.isnumeric())
-                valid_stocks = stock_data[mask]
-                
-                for _, row in valid_stocks.iterrows():
-                    ticker = f"{row[0]}{suffix}"
-                    name = row[1]
-                    tickers[ticker] = name
+            for _, row in df.iterrows():
+                raw_data = str(row['有價證券代號及名稱'])
+                # 使用全形空白切割
+                parts = raw_data.split(' ')
+                if len(parts) >= 2:
+                    code = parts[0].strip()
+                    name = parts[1].strip()
+                    # 嚴格限制：長度等於4 且 必須全部為數字
+                    if len(code) == 4 and code.isdigit():
+                        tickers[f"{code}{suffix}"] = name
     except Exception as e:
         print(f"抓取股票代號失敗: {e}")
     
