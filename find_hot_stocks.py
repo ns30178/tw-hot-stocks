@@ -10,7 +10,7 @@ warnings.filterwarnings("ignore")
 
 def get_all_tw_tickers():
     """
-    獲取上市櫃股票代號與名稱字典，強制過濾非4碼與非數字代號
+    獲取上市櫃股票代號，並嚴格過濾掉 5 碼異常代號
     """
     tickers = {}
     try:
@@ -19,74 +19,55 @@ def get_all_tw_tickers():
             url = f"https://isin.twse.com.tw/isin/C_public.jsp?strMode={mode}"
             res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
             df = pd.read_html(res.text)[0]
-            
             df.columns = df.iloc[0]
             df = df.iloc[1:]
-            
             for _, row in df.iterrows():
                 raw_data = str(row['有價證券代號及名稱'])
-                # 使用全形空白切割
-                parts = raw_data.split(' ')
+                parts = raw_data.split('　')
                 if len(parts) >= 2:
                     code = parts[0].strip()
                     name = parts[1].strip()
-                    # 嚴格限制：長度等於4 且 必須全部為數字
+                    # 強制只取 4 碼數字代號
                     if len(code) == 4 and code.isdigit():
                         tickers[f"{code}{suffix}"] = name
     except Exception as e:
-        print(f"抓取股票代號失敗: {e}")
-    
+        print(f"代號獲取異常: {e}")
     return tickers
 
 def check_stock(ticker, name):
     try:
-        time.sleep(random.uniform(0.5, 2.0))
+        time.sleep(random.uniform(0.5, 1.5))
+        session = requests.Session()
+        session.headers.update({'User-Agent': 'Mozilla/5.0'})
         
-        stock = yf.Ticker(ticker)
-        data = yf.download(ticker, period="1y", progress=False)
-        
-        if len(data) < 200:
-            return None
-
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = data.columns.droplevel(1)
+        # 加入 session 機制修復 401 錯誤
+        data = yf.download(ticker, period="1y", progress=False, session=session)
+        if len(data) < 200: return None
+        if isinstance(data.columns, pd.MultiIndex): data.columns = data.columns.droplevel(1)
 
         data['MA20'] = data['Close'].rolling(window=20).mean()
         data['MA60'] = data['Close'].rolling(window=60).mean()
         data['VMA5'] = data['Volume'].rolling(window=5).mean()
         data['Daily_Return'] = data['Close'].pct_change()
-
         latest = data.iloc[-1]
 
-        if pd.isna(latest['MA20']) or pd.isna(latest['MA60']) or pd.isna(latest['VMA5']):
-            return None
-
-        cond_price_above_ma = (latest['Close'] > latest['MA20']) and (latest['Close'] > latest['MA60'])
-        cond_ma_trend = latest['MA20'] > latest['MA60']
-        cond_volume_breakout = latest['Volume'] > (latest['VMA5'] * 2)
-        cond_price_momentum = latest['Daily_Return'] > 0.05
+        # 原始嚴格篩選條件
+        cond_price_above_ma = (latest['Close'] > latest['MA20']) and (latest['Close'] > latest['MA60']) and (latest['MA20'] > latest['MA60'])
         cond_200_high = latest['Close'] >= data['Close'].tail(200).max()
-        
+        cond_price_momentum = latest['Daily_Return'] > 0.05
+        cond_volume_breakout = latest['Volume'] > (latest['VMA5'] * 2)
         volume_lots = latest['Volume'] / 1000
-        cond_volume_range = (50 < volume_lots < 5000)
+        cond_volume_range = (50 <= volume_lots <= 5000)
 
-        if cond_price_above_ma and cond_ma_trend and cond_volume_breakout and cond_price_momentum and cond_200_high and cond_volume_range:
+        if cond_price_above_ma and cond_200_high and cond_price_momentum and cond_volume_breakout and cond_volume_range:
+            stock = yf.Ticker(ticker)
             info = stock.info
+            capital = info.get('sharesOutstanding', 0) * 10
+            book_value = info.get('bookValue', 0)
             
-            shares = info.get('sharesOutstanding')
-            if shares is None:
-                return None
-            capital = shares * 10
-            cond_capital = capital < 1_000_000_000
-
-            book_value = info.get('bookValue')
-            if book_value is None:
-                return None
-            cond_book_value = book_value > 5
-
-            if cond_capital and cond_book_value:
+            if capital < 1_000_000_000 and book_value > 5:
                 return {
-                    '股票代號': ticker.replace('.TW', '').replace('.TWO', ''),
+                    '股票代號': ticker.split('.')[0],
                     '股票名稱': name,
                     '現價': round(float(latest['Close']), 2),
                     '單日漲跌幅(%)': round(float(latest['Daily_Return']) * 100, 2),
@@ -96,38 +77,26 @@ def check_stock(ticker, name):
                 }
     except Exception:
         pass
-    
     return None
 
 def main():
-    print("正在獲取上市櫃股票代號...")
     tickers_dict = get_all_tw_tickers()
+    if not tickers_dict: tickers_dict = {'2330.TW': '台積電', '2317.TW': '鴻海', '2454.TW': '聯發科'}
     
-    if not tickers_dict:
-        print("無法獲取股票代號，改用備用清單執行。")
-        tickers_dict = {'2330.TW': '台積電', '2317.TW': '鴻海', '2454.TW': '聯發科'}
-
-    print(f"開始掃描 {len(tickers_dict)} 檔股票... (需時較長，請耐心等候)")
     results = []
-    
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {executor.submit(check_stock, ticker, name): ticker for ticker, name in tickers_dict.items()}
-        
+        futures = {executor.submit(check_stock, t, n): t for t, n in tickers_dict.items()}
         for future in concurrent.futures.as_completed(futures):
             res = future.result()
-            if res is not None:
+            if res:
                 results.append(res)
-                print(f"發現符合條件標的: {res['股票代號']} {res['股票名稱']}")
+                print(f"發現標的: {res['股票代號']} {res['股票名稱']}")
 
     if results:
-        df_results = pd.DataFrame(results)
-        df_results = df_results.sort_values(by='單日漲跌幅(%)', ascending=False).reset_index(drop=True)
+        df_results = pd.DataFrame(results).sort_values(by='單日漲跌幅(%)', ascending=False)
         df_results.to_json('daily_hot_stocks.json', orient='records', force_ascii=False)
-        print("\n資料已匯出至 daily_hot_stocks.json")
     else:
-        print("\n目前無符合條件的股票。")
-        with open('daily_hot_stocks.json', 'w', encoding='utf-8') as f:
-            f.write('[]')
+        with open('daily_hot_stocks.json', 'w', encoding='utf-8') as f: f.write('[]')
 
 if __name__ == "__main__":
     main()
