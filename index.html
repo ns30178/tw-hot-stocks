@@ -1,4 +1,3 @@
-html
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -36,7 +35,8 @@ html
                     <thead class="bg-gray-50">
                         <tr>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">股票代號</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">收盤價</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">股票名稱</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">現價</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">單日漲跌幅(%)</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">成交量(張)</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">資本額(億)</th>
@@ -78,9 +78,9 @@ html
                 
                 if (isPreview) {
                     data = [
-                        { '股票代號': '3324', '收盤價': 50.20, '單日漲跌幅(%)': 6.50, '成交量(張)': 1200, '資本額(億)': 5.50, '最新淨值': 12.30 },
-                        { '股票代號': '5432', '收盤價': 80.00, '單日漲跌幅(%)': 9.80, '成交量(張)': 4500, '資本額(億)': 8.20, '最新淨值': 25.10 },
-                        { '股票代號': '6677', '收盤價': 120.50, '單日漲跌幅(%)': 5.10, '成交量(張)': 850, '資本額(億)': 3.10, '最新淨值': 45.60 }
+                        { '股票代號': '3324', '股票名稱': '雙鴻', '現價': 50.20, '單日漲跌幅(%)': 6.50, '成交量(張)': 1200, '資本額(億)': 5.50, '最新淨值': 12.30 },
+                        { '股票代號': '5432', '股票名稱': '新門', '現價': 80.00, '單日漲跌幅(%)': 9.80, '成交量(張)': 4500, '資本額(億)': 8.20, '最新淨值': 25.10 },
+                        { '股票代號': '6677', '股票名稱': '微穎', '現價': 120.50, '單日漲跌幅(%)': 5.10, '成交量(張)': 850, '資本額(億)': 3.10, '最新淨值': 45.60 }
                     ];
                     timeEl.textContent = '預覽模式：展示模擬資料';
                 } else {
@@ -110,7 +110,8 @@ html
 
                     row.innerHTML = `
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">${stock['股票代號']}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${stock['收盤價'].toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${stock['股票名稱']}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${stock['現價'].toFixed(2)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm ${returnColorClass}">${stock['單日漲跌幅(%)'].toFixed(2)}%</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${stock['成交量(張)'].toLocaleString()}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${stock['資本額(億)'].toFixed(2)}</td>
@@ -131,5 +132,3 @@ html
     </script>
 </body>
 </html>
-
-
