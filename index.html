@@ -2,69 +2,30 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>台股雙策略觀測站</title>
+    <title>除錯版</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 p-2">
-
-    <div class="max-w-6xl mx-auto mb-6">
-        <h1 class="text-3xl font-extrabold text-gray-800">台股雙策略觀測站</h1>
-        <p id="status-msg" class="text-gray-600 mt-2 font-bold">系統載入中...</p>
-    </div>
-
-    <div class="space-y-6">
-        <div class="max-w-6xl mx-auto bg-white p-4 rounded shadow border-t-4 border-blue-500">
-            <h2 class="text-lg font-bold mb-2">飆股策略 (Original)</h2>
-            <div class="overflow-x-auto"><table class="w-full text-left text-xs">
-                <thead><tr class="bg-gray-50 border-b"><th>代號</th><th>名稱</th><th>產業</th><th>熱度</th><th>現價</th><th>漲幅%</th><th>量(張)</th><th>EPS</th><th>本益比</th></tr></thead>
-                <tbody id="body-original"></tbody>
-            </table></div>
-        </div>
-        <div class="max-w-6xl mx-auto bg-white p-4 rounded shadow border-t-4 border-emerald-500">
-            <h2 class="text-lg font-bold mb-2">AI 選股策略 (AI)</h2>
-            <div class="overflow-x-auto"><table class="w-full text-left text-xs">
-                <thead><tr class="bg-gray-50 border-b"><th>代號</th><th>名稱</th><th>產業</th><th>熱度</th><th>現價</th><th>漲幅%</th><th>量(張)</th><th>EPS</th><th>本益比</th></tr></thead>
-                <tbody id="body-ai"></tbody>
-            </table></div>
-        </div>
-        <div class="max-w-6xl mx-auto bg-white p-4 rounded shadow border-t-4 border-purple-500">
-            <h2 class="text-lg font-bold mb-2">核心交集標的</h2>
-            <div class="overflow-x-auto"><table class="w-full text-left text-xs">
-                <thead><tr class="bg-gray-50 border-b"><th>代號</th><th>名稱</th><th>產業</th><th>熱度</th><th>現價</th><th>漲幅%</th><th>量(張)</th><th>EPS</th><th>本益比</th></tr></thead>
-                <tbody id="body-inter"></tbody>
-            </table></div>
-        </div>
-    </div>
-
-    <div class="max-w-6xl mx-auto bg-gray-800 text-white p-4 rounded mt-6 text-xs">
-        <h2 class="font-bold border-b border-gray-600 mb-2 pb-1">策略定義</h2>
-        <p><span class="text-blue-300 font-bold">飆股 (A)</span>: 200日新高、資本額 < 10億、淨值 > 5元</p>
-        <p><span class="text-emerald-300 font-bold">AI (B)</span>: 股價 > 10元、均線糾結、紅K > 50%</p>
-    </div>
+<body class="bg-gray-100 p-4">
+    <h1 class="text-2xl font-bold mb-4">台股觀測站</h1>
+    <p id="msg" class="text-red-500">正在測試連線...</p>
 
     <script>
+        const msg = document.getElementById('msg');
+        
+        // 1. 測試連線
         fetch('daily_hot_stocks.json?t=' + new Date().getTime())
-        .then(response => response.json())
+        .then(res => {
+            if (!res.ok) throw new Error("找不到檔案 (HTTP " + res.status + ")");
+            return res.json();
+        })
         .then(data => {
-            document.getElementById('status-msg').innerText = "資料更新時間：" + data.update_time;
-            
-            const render = (id, list) => {
-                const tbody = document.getElementById(id);
-                tbody.innerHTML = list.length === 0 ? '<tr><td colspan="9" class="p-2 text-center text-gray-400">目前無標的</td></tr>' : 
-                list.map(s => `<tr>
-                    <td class="p-2">${s['股票代號']||'-'}</td><td class="p-2 font-bold">${s['股票名稱']||'-'}</td>
-                    <td class="p-2">${s['產業面']||'-'}</td><td class="p-2">${s['熱門程度']||'-'}</td>
-                    <td class="p-2">${s['現價']||'-'}</td><td class="p-2">${s['單日漲跌幅(%)']||'0'}%</td>
-                    <td class="p-2">${s['成交量(張)']||'-'}</td><td class="p-2">${s['每股盈餘(EPS)']||'-'}</td><td class="p-2">${s['本益比']||'-'}</td>
-                </tr>`).join('');
-            };
-
-            render('body-original', data.original_strategy);
-            render('body-ai', data.ai_strategy);
-            render('body-inter', data.intersection);
+            msg.className = "text-green-600";
+            msg.innerText = "連線成功！資料已抓到，請檢查檔案名稱是否為 daily_hot_stocks.json";
         })
         .catch(err => {
-            document.getElementById('status-msg').innerText = "讀取失敗，請確認檔案位置";
+            // 這一行會直接把錯誤顯示在螢幕上，告訴我們到底是哪裡卡住
+            msg.innerHTML = "❌ 錯誤: " + err.message + "<br><br>請檢查：<br>1. daily_hot_stocks.json 是否在同個資料夾？<br>2. 檔名大小寫是否完全一樣？";
+            alert("錯誤訊息: " + err.message);
         });
     </script>
 </body>
