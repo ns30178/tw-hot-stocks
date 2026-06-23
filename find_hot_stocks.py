@@ -5,6 +5,8 @@ import warnings
 import requests
 import time
 import random
+import json
+from datetime import datetime, timezone, timedelta
 
 warnings.filterwarnings("ignore")
 
@@ -40,17 +42,21 @@ def check_stock(ticker, name):
         if len(data) < 200: return None
         if isinstance(data.columns, pd.MultiIndex): data.columns = data.columns.droplevel(1)
 
+        data['MA50'] = data['Close'].rolling(window=50).mean()
         latest = data.iloc[-1]
         prev = data.iloc[-2] if len(data) > 1 else latest
         
         daily_return = ((latest['Close'] - prev['Close']) / prev['Close']) * 100
         volume_lots = latest['Volume'] / 1000
 
-        # 策略條件：200日新高 與 成交量 50~5000張
+        # 策略條件：200日新高、成交量 50~5000張、距離50日均線 20%~30% (絕對值)
         cond_200_high = latest['Close'] >= data['Close'].tail(200).max()
         cond_volume = 50 < volume_lots < 5000
         
-        if cond_200_high and cond_volume:
+        distance_ma50 = abs(latest['Close'] - latest['MA50']) / latest['MA50']
+        cond_ma50 = 0.20 <= distance_ma50 <= 0.30
+        
+        if cond_200_high and cond_volume and cond_ma50:
             stock = yf.Ticker(ticker)
             info = stock.info
             capital = info.get('sharesOutstanding', 0) * 10
@@ -78,7 +84,6 @@ def check_stock(ticker, name):
 def main():
     tickers_dict = get_all_tw_tickers()
     
-    # 數量計算與警告印出機制
     if not tickers_dict: 
         print("【警告】無法獲取全市場代號，啟用備用清單 (共 3 檔)。")
         tickers_dict = {'2330.TW': '台積電', '2317.TW': '鴻海', '2454.TW': '聯發科'}
@@ -94,12 +99,21 @@ def main():
                 results.append(res)
                 print(f"發現標的: {res['股票代號']} {res['股票名稱']}")
 
+    # 取得台灣時間
+    tz_tw = timezone(timedelta(hours=8))
+    update_time_str = datetime.now(tz_tw).strftime("%Y-%m-%d %H:%M:%S")
+
+    output_data = {
+        "update_time": update_time_str,
+        "data": results
+    }
+
+    with open('daily_hot_stocks.json', 'w', encoding='utf-8') as f:
+        json.dump(output_data, f, ensure_ascii=False, indent=4)
+        
     if results:
-        df_results = pd.DataFrame(results)
-        df_results.to_json('daily_hot_stocks.json', orient='records', force_ascii=False)
         print(f"掃描完成，共 {len(results)} 檔符合條件，已輸出至 JSON。")
     else:
-        with open('daily_hot_stocks.json', 'w', encoding='utf-8') as f: f.write('[]')
         print("掃描完成，今日無符合條件標的。")
 
 if __name__ == "__main__":
