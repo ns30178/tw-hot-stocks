@@ -40,21 +40,22 @@
 
     <div class="max-w-6xl mx-auto bg-gray-800 text-white p-6 rounded shadow-md mb-8">
         <h2 class="text-xl font-bold mb-4 border-b border-gray-600 pb-2">當前選股策略定義</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm">
             <div>
-                <h3 class="text-lg font-semibold text-blue-300">飆股策略</h3>
-                <ul class="list-disc list-inside text-gray-300 text-sm">
-                    <li>收盤價 200 日內創新高</li>
-                    <li>資本額 < 10 億、淨值 > 5 元</li>
-                    <li>成交量 50 ~ 5000 張</li>
+                <h3 class="text-lg font-semibold text-blue-300 mb-2">飆股策略 (A區塊)</h3>
+                <ul class="list-disc list-inside text-gray-300 space-y-1">
+                    <li>技術面：收盤價 200 日內創新高。</li>
+                    <li>量能：成交量介於 50 至 5000 張之間。</li>
+                    <li>基本面：資本額小於 10 億、淨值大於 5 元。</li>
                 </ul>
             </div>
             <div>
-                <h3 class="text-lg font-semibold text-emerald-300">AI 選股策略</h3>
-                <ul class="list-disc list-inside text-gray-300 text-sm">
-                    <li>股本 < 50億、股價 > 10元</li>
-                    <li>均線糾結轉發散、量能放大</li>
-                    <li>K線實體紅K比例 > 50%</li>
+                <h3 class="text-lg font-semibold text-emerald-300 mb-2">AI 選股策略 (B區塊)</h3>
+                <ul class="list-disc list-inside text-gray-300 space-y-1">
+                    <li>基本面：股價 > 10 元、資本額 < 50 億。</li>
+                    <li>均線：MA10/20/60 糾結 (開口 < 5%) 且突破均線。</li>
+                    <li>動能：成交量 > 5 日均量 2 倍、且 ATR 波動放大。</li>
+                    <li>型態：紅K實體 > 50%、上影線 < 30%。</li>
                 </ul>
             </div>
         </div>
@@ -63,8 +64,9 @@
     <script>
         function renderTable(tbodyId, data) {
             const tbody = document.getElementById(tbodyId);
+            if (!tbody) return;
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="p-4 text-gray-400 text-center italic">無符合條件標的</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="p-4 text-gray-400 text-center italic">目前無符合條件標的</td></tr>';
                 return;
             }
             tbody.innerHTML = data.map(s => `
@@ -73,26 +75,4 @@
                     <td class="p-2 font-bold text-gray-800">${s['股票名稱'] || '-'}</td>
                     <td class="p-2">${s['產業面'] || '-'}</td>
                     <td class="p-2 font-bold ${s['熱門程度'] === '極高' ? 'text-red-600' : 'text-gray-600'}">${s['熱門程度'] || '-'}</td>
-                    <td class="p-2">${s['現價'] || '-'}</td>
-                    <td class="p-2 ${s['單日漲跌幅(%)'] > 0 ? 'text-red-500' : 'text-green-500'}">
-                        ${s['單日漲跌幅(%)'] ? (s['單日漲跌幅(%)'] > 0 ? '+' : '') + s['單日漲跌幅(%)'] + '%' : '-'}
-                    </td>
-                    <td class="p-2">${s['成交量(張)'] || '-'}</td>
-                    <td class="p-2">${s['每股盈餘(EPS)'] || '-'}</td>
-                    <td class="p-2">${s['本益比'] || '-'}</td>
-                </tr>
-            `).join('');
-        }
-
-        fetch('daily_hot_stocks.json?t=' + new Date().getTime())
-            .then(res => res.json())
-            .then(data => {
-                document.getElementById('update-time').innerText = "資料更新時間：" + (data.update_time || '未知');
-                renderTable('body-original_strategy', data.original_strategy);
-                renderTable('body-ai_strategy', data.ai_strategy);
-                renderTable('body-intersection', data.intersection);
-            })
-            .catch(err => { console.error(err); });
-    </script>
-</body>
-</html>
+                    <td class="p-2">${s['現價'] || '-
