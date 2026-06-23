@@ -36,8 +36,9 @@ jobs:
         git config --global user.name "GitHub Action Bot"
         git config --global user.email "action@github.com"
         
-        # 直接加入檔案並提交，不需要 pull
-        git add daily_hot_stocks.json
+        # 顯示檔案位置確保確認無誤
+        ls -la daily_hot_stocks.json
         
-        # 檢查是否有更動，有變動才 commit
+        # 直接加入並推播
+        git add daily_hot_stocks.json
         git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update stock data" && git push)
