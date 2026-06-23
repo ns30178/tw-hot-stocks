@@ -2,54 +2,125 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>台股飆股觀測站</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 p-8">
-    <div class="max-w-6xl mx-auto bg-white p-6 rounded shadow">
-        <h1 class="text-xl font-bold mb-4">篩選結果</h1>
-        <table class="w-full text-left">
-            <thead>
-                <tr class="border-b">
-                    <th class="py-2">代號</th>
-                    <th class="py-2">名稱</th>
-                    <th class="py-2">現價</th>
-                    <th class="py-2">成交量(張)</th>
-                    <th class="py-2">資本額(億)</th>
-                    <th class="py-2">EPS</th>
-                </tr>
-            </thead>
-            <tbody id="body"></tbody>
-        </table>
+<body class="bg-gray-100 p-4 md:p-8">
+    <div class="max-w-6xl mx-auto bg-white p-6 rounded shadow-md">
+        <div class="flex flex-col md:flex-row justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold text-gray-800 mb-2 md:mb-0">篩選結果</h1>
+            <span id="update-time" class="text-sm text-gray-500"></span>
+        </div>
+
+        <!-- 載入中動畫 -->
+        <div id="loading" class="py-12 flex flex-col items-center justify-center">
+            <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+            <span class="mt-4 text-gray-500">資料讀取中...</span>
+        </div>
+
+        <!-- 表格容器 (響應式橫向捲動) -->
+        <div id="table-container" class="hidden overflow-x-auto">
+            <table class="w-full text-left whitespace-nowrap">
+                <thead>
+                    <tr class="border-b-2 border-gray-200 bg-gray-50 text-gray-600">
+                        <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 transition-colors" onclick="sortTable('股票代號')">代號 ↕</th>
+                        <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 transition-colors" onclick="sortTable('股票名稱')">名稱 ↕</th>
+                        <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 transition-colors text-right" onclick="sortTable('現價')">現價 ↕</th>
+                        <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 transition-colors text-right" onclick="sortTable('成交量(張)')">成交量(張) ↕</th>
+                        <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 transition-colors text-right" onclick="sortTable('資本額(億)')">資本額(億) ↕</th>
+                        <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 transition-colors text-right" onclick="sortTable('每股盈餘(EPS)')">EPS ↕</th>
+                    </tr>
+                </thead>
+                <tbody id="body" class="text-gray-700"></tbody>
+            </table>
+        </div>
     </div>
+
     <script>
-        // 改用最基礎的 fetch 請求方式，完全避免使用 URL 建構函數，解決 Blob URL 解析錯誤
-        fetch('daily_hot_stocks.json')
+        let stockData = [];
+        let currentSort = { key: '', asc: true };
+
+        // 數值格式化處理
+        function formatNumber(num, decimals = 2) {
+            if (num === null || num === undefined || isNaN(num)) return '-';
+            return Number(num).toLocaleString('zh-TW', { 
+                minimumFractionDigits: decimals, 
+                maximumFractionDigits: decimals 
+            });
+        }
+
+        // 渲染表格
+        function renderTable(data) {
+            const body = document.getElementById('body');
+            body.innerHTML = '';
+            
+            if (!data || data.length === 0) {
+                body.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-gray-500">目前無符合篩選條件的標的</td></tr>';
+                return;
+            }
+
+            data.forEach(s => {
+                body.innerHTML += `<tr class="border-b hover:bg-blue-50 transition-colors">
+                    <td class="py-3 px-4 font-medium text-blue-600">${s['股票代號'] || '-'}</td>
+                    <td class="py-3 px-4 font-medium">${s['股票名稱'] || '-'}</td>
+                    <td class="py-3 px-4 text-right">${formatNumber(s['現價'], 2)}</td>
+                    <td class="py-3 px-4 text-right">${formatNumber(s['成交量(張)'], 0)}</td>
+                    <td class="py-3 px-4 text-right">${formatNumber(s['資本額(億)'], 2)}</td>
+                    <td class="py-3 px-4 text-right">${formatNumber(s['每股盈餘(EPS)'], 2)}</td>
+                </tr>`;
+            });
+        }
+
+        // 排序邏輯
+        function sortTable(key) {
+            if (currentSort.key === key) {
+                currentSort.asc = !currentSort.asc;
+            } else {
+                currentSort.key = key;
+                currentSort.asc = true;
+            }
+
+            stockData.sort((a, b) => {
+                let valA = a[key] ?? '';
+                let valB = b[key] ?? '';
+
+                if (typeof valA === 'string' && typeof valB === 'string') {
+                    return currentSort.asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                } else {
+                    return currentSort.asc ? (valA - valB) : (valB - valA);
+                }
+            });
+            
+            renderTable(stockData);
+        }
+
+        // 執行資料讀取
+        const now = new Date();
+        document.getElementById('update-time').innerText = `檢視時間：${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+        // 動態判斷路徑：如果在目前的預覽環境 (blob:) 中，直接向 GitHub Pages 請求真實資料
+        let jsonUrl = 'daily_hot_stocks.json';
+        if (window.location.protocol === 'blob:' || window.location.href.includes('googleusercontent')) {
+            jsonUrl = 'https://ns30178.github.io/tw-hot-stocks/daily_hot_stocks.json';
+        }
+
+        fetch(jsonUrl)
             .then(r => {
                 if (!r.ok) throw new Error('無法讀取資料');
                 return r.json();
             })
             .then(data => {
-                const body = document.getElementById('body');
-                if (!data || data.length === 0) {
-                    body.innerHTML = '<tr><td colspan="6" class="py-4 text-center text-gray-500">目前無符合篩選條件的標的</td></tr>';
-                    return;
-                }
-                body.innerHTML = '';
-                data.forEach(s => {
-                    body.innerHTML += `<tr class="border-b">
-                        <td class="py-2">${s['股票代號'] || '-'}</td>
-                        <td class="py-2">${s['股票名稱'] || '-'}</td>
-                        <td class="py-2">${s['現價'] || '-'}</td>
-                        <td class="py-2">${s['成交量(張)'] || '-'}</td>
-                        <td class="py-2">${s['資本額(億)'] || '-'}</td>
-                        <td class="py-2">${s['每股盈餘(EPS)'] || '-'}</td>
-                    </tr>`;
-                });
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('table-container').classList.remove('hidden');
+                stockData = data;
+                renderTable(stockData);
             })
             .catch(err => {
                 console.error(err);
-                document.getElementById('body').innerHTML = '<tr><td colspan="6" class="py-4 text-center text-red-500">資料讀取失敗，請確認檔案是否存在於正確目錄</td></tr>';
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('table-container').classList.remove('hidden');
+                document.getElementById('body').innerHTML = '<tr><td colspan="6" class="py-8 text-center text-red-500">資料讀取失敗，請確認檔案是否存在</td></tr>';
             });
     </script>
 </body>
