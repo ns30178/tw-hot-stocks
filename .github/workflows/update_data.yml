@@ -11,7 +11,6 @@ permissions:
 jobs:
   build-and-update:
     runs-on: ubuntu-latest
-    
     env:
       TZ: Asia/Taipei
 
@@ -37,12 +36,12 @@ jobs:
         git config --global user.name "GitHub Action Bot"
         git config --global user.email "action@github.com"
         
-        # 強制清理環境，確保沒有殘留的修改影響 Git 操作
+        # 強制重置 Git 環境，避免任何潛在的衝突
         git reset --hard HEAD
         git fetch origin
         git pull origin main --rebase
         
-        # 加入新資料並提交
+        # 僅在有變動時才 commit
         git add daily_hot_stocks.json
         git diff --quiet && git diff --staged --quiet || git commit -m "Auto-update stock data"
         git push
