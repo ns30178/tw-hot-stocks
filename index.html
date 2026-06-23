@@ -7,19 +7,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 p-4 md:p-8">
+    
+    <!-- 表格區塊 (移動至上方) -->
     <div class="max-w-6xl mx-auto bg-white p-6 rounded shadow-md mb-6">
-        <h2 class="text-xl font-bold text-gray-800 mb-3 border-b pb-2">當前選股策略</h2>
-        <ul class="list-disc list-inside text-gray-700 space-y-1">
-            <li>收盤價創新高低 -- 200日內創新高</li>
-            <li>資本額 < 10 億</li>
-            <li>最新淨值 > 5 元</li>
-            <li>成交量張數 < 5000 張</li>
-            <li>成交量張數 > 50 張</li>
-            <li>價格距離50日均線 20% ~ 30%</li>
-        </ul>
-    </div>
-
-    <div class="max-w-6xl mx-auto bg-white p-6 rounded shadow-md">
         <div class="flex flex-col md:flex-row justify-between items-center mb-6">
             <h1 class="text-2xl font-bold text-gray-800 mb-2 md:mb-0">篩選結果</h1>
             <div class="text-right">
@@ -50,6 +40,18 @@
                 <tbody id="body" class="text-gray-700"></tbody>
             </table>
         </div>
+    </div>
+
+    <!-- 策略說明區塊 (移動至下方) -->
+    <div class="max-w-6xl mx-auto bg-white p-6 rounded shadow-md">
+        <h2 class="text-xl font-bold text-gray-800 mb-3 border-b pb-2">當前選股策略</h2>
+        <ul class="list-disc list-inside text-gray-700 space-y-1">
+            <li>收盤價創新高低 -- 200日內創新高</li>
+            <li>資本額 < 10 億</li>
+            <li>最新淨值 > 5 元</li>
+            <li>成交量張數 < 5000 張</li>
+            <li>成交量張數 > 50 張</li>
+        </ul>
     </div>
 
     <script>
