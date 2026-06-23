@@ -5,48 +5,55 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>台股雙策略觀測站</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>.sort-active { color: #2563eb; font-weight: bold; }</style>
 </head>
 <body class="bg-gray-100 p-4">
-    <div class="max-w-6xl mx-auto mb-6 flex flex-col md:flex-row justify-between items-end">
-        <div>
-            <h1 class="text-3xl font-extrabold text-gray-800">台股雙策略觀測站</h1>
-            <p class="text-gray-600 mt-2">自動比對原始策略與 AI 量化策略之交集標的</p>
-        </div>
-        <div class="text-right mt-4">
-            <div id="backend-update-time" class="text-sm font-bold text-blue-600">資料更新時間：讀取中...</div>
-        </div>
+    <div class="max-w-6xl mx-auto mb-6">
+        <h1 class="text-3xl font-extrabold text-gray-800">台股雙策略觀測站</h1>
+        <div id="backend-update-time" class="text-sm font-bold text-blue-600 mt-2">狀態：準備讀取...</div>
     </div>
 
     <div id="loading" class="max-w-6xl mx-auto py-12 flex flex-col items-center justify-center bg-white rounded shadow-md">
         <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
-        <span class="mt-4 text-gray-500">資料讀取中...</span>
+        <p class="mt-4 text-gray-500">正在讀取資料，若持續轉圈請檢查行動網路...</p>
     </div>
 
-    <div id="data-container" class="hidden">
-        <div class="max-w-6xl mx-auto bg-white p-6 rounded shadow-md mb-8 border-t-4 border-blue-500">
-            <h2 class="text-xl font-bold text-blue-700 mb-4">飆股策略 <span id="count-original_strategy" class="text-sm text-gray-400"></span></h2>
-            <div class="overflow-x-auto"><table class="w-full text-left" id="table-original_strategy"><thead><tr class="border-b bg-blue-50 text-sm"></tr></thead><tbody id="body-original_strategy"></tbody></table></div>
-        </div>
-        </div>
+    <div id="error-debug" class="hidden max-w-6xl mx-auto p-4 bg-red-100 text-red-700 rounded mt-4">
+        <h2 class="font-bold">讀取失敗 (除錯資訊):</h2>
+        <pre id="error-content" class="text-xs overflow-auto mt-2"></pre>
+    </div>
+
+    <div id="data-container" class="hidden max-w-6xl mx-auto bg-white p-6 rounded shadow-md">
+        <h2 class="text-xl font-bold mb-4">資料已載入</h2>
+        <div id="table-content"></div>
+    </div>
 
     <script>
-        // 設定 GitHub Pages 的完整絕對路徑
-        const DATA_URL = 'https://ns30178.github.io/tw-hot-stocks/daily_hot_stocks.json';
+        // 強制使用相對路徑，避免網域名稱解析錯誤
+        const jsonPath = 'daily_hot_stocks.json?t=' + new Date().getTime();
 
-        fetch(`${DATA_URL}?t=${new Date().getTime()}`)
-            .then(r => {
-                if (!r.ok) throw new Error('連線失敗，代碼: ' + r.status);
-                return r.json();
+        fetch(jsonPath)
+            .then(response => {
+                if (!response.ok) throw new Error('HTTP 錯誤: ' + response.status);
+                return response.text(); // 先讀取成純文字，不要直接轉 JSON
             })
-            .then(data => {
-                document.getElementById('loading').classList.add('hidden');
-                document.getElementById('data-container').classList.remove('hidden');
-                document.getElementById('backend-update-time').innerText = `資料更新時間：${data.update_time || '未知'}`;
-                // 這裡渲染你的表格...
+            .then(text => {
+                try {
+                    const data = JSON.parse(text);
+                    document.getElementById('loading').classList.add('hidden');
+                    document.getElementById('data-container').classList.remove('hidden');
+                    document.getElementById('backend-update-time').innerText = `資料更新時間：${data.update_time}`;
+                    // 渲染邏輯...
+                } catch (e) {
+                    // 如果解析失敗，直接把讀到的內容顯示出來
+                    document.getElementById('loading').classList.add('hidden');
+                    document.getElementById('error-debug').classList.remove('hidden');
+                    document.getElementById('error-content').innerText = "這不是 JSON 格式，內容為:\n" + text;
+                }
             })
             .catch(err => {
-                alert("網頁讀取錯誤: " + err.message + "\n如果是學校網路，請嘗試切換行動網路。");
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('error-debug').classList.remove('hidden');
+                document.getElementById('error-content').innerText = err.message;
             });
     </script>
 </body>
