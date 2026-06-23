@@ -31,17 +31,19 @@ jobs:
     - name: Run stock screener
       run: python find_hot_stocks.py
 
-    - name: Commit and push changes
+    - name: Verify and Push
       run: |
         git config --global user.name "GitHub Action Bot"
         git config --global user.email "action@github.com"
         
-        # 強制重置 Git 環境，避免任何潛在的衝突
-        git reset --hard HEAD
+        # 1. 檢查檔案是否真的生成了
+        ls -la daily_hot_stocks.json
+        
+        # 2. 強制重置與同步
         git fetch origin
         git pull origin main --rebase
         
-        # 僅在有變動時才 commit
+        # 3. 提交
         git add daily_hot_stocks.json
         git diff --quiet && git diff --staged --quiet || git commit -m "Auto-update stock data"
-        git push
+        git push origin main
