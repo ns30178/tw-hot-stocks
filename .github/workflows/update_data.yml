@@ -2,12 +2,21 @@ name: Update Hot Stocks Data
 
 on:
   schedule:
+    # UTC 08:00 = 台灣時間 16:00 (台股盤後，資料已穩定)
     - cron: '0 8 * * 1-5'
   workflow_dispatch:
+
+# 【強化 1】明確賦予寫入權限，防止 git push 失敗
+permissions:
+  contents: write
 
 jobs:
   build-and-update:
     runs-on: ubuntu-latest
+    
+    # 【強化 2】設定虛擬環境時區為台北，確保任何時間函式預設正確
+    env:
+      TZ: Asia/Taipei
 
     steps:
     - name: Checkout repository
@@ -17,6 +26,8 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
+        # 【強化 3】加入 pip 快取機制，大幅縮短每次安裝套件的時間
+        cache: 'pip'
 
     - name: Install dependencies
       run: |
@@ -30,6 +41,7 @@ jobs:
       run: |
         git config --global user.name "GitHub Action Bot"
         git config --global user.email "action@github.com"
+        git pull origin main --rebase  # 【強化 4】推播前先拉取最新版本，防止檔案衝突
         git add daily_hot_stocks.json
         git diff --quiet && git diff --staged --quiet || git commit -m "Auto-update stock data"
         git push
