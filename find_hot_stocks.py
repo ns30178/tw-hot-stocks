@@ -9,7 +9,6 @@ import random
 warnings.filterwarnings("ignore")
 
 def get_all_tw_tickers():
-    """獲取上市櫃股票代號，過濾 5 碼異常代號"""
     tickers = {}
     try:
         modes = {'2': '.TW', '4': '.TWO'}
@@ -41,30 +40,36 @@ def check_stock(ticker, name):
         if len(data) < 200: return None
         if isinstance(data.columns, pd.MultiIndex): data.columns = data.columns.droplevel(1)
 
-        data['MA20'] = data['Close'].rolling(window=20).mean()
-        data['VMA5'] = data['Volume'].rolling(window=5).mean()
         latest = data.iloc[-1]
-
-        # 趨勢與量能條件
-        cond_trend = (latest['Close'] >= data['Close'].tail(200).max()) and (latest['Close'] > latest['MA20'])
-        cond_volume = (latest['Volume'] > 50000) and (latest['Volume'] < 5000000) and (latest['Volume'] > (latest['VMA5'] * 2))
+        prev = data.iloc[-2] if len(data) > 1 else latest
         
-        if cond_trend and cond_volume:
+        daily_return = ((latest['Close'] - prev['Close']) / prev['Close']) * 100
+        volume_lots = latest['Volume'] / 1000
+
+        # 策略條件：200日新高 與 成交量 50~5000張
+        cond_200_high = latest['Close'] >= data['Close'].tail(200).max()
+        cond_volume = 50 < volume_lots < 5000
+        
+        if cond_200_high and cond_volume:
             stock = yf.Ticker(ticker)
             info = stock.info
             capital = info.get('sharesOutstanding', 0) * 10
             book_value = info.get('bookValue', 0)
-            eps = info.get('trailingEps', 0)
             
-            # 財務與籌碼條件
-            if capital < 1_000_000_000 and book_value > 5 and eps > 0:
+            # 策略條件：資本額 < 10億 與 最新淨值 > 5
+            if capital < 1_000_000_000 and book_value > 5:
+                eps = info.get('trailingEps')
+                pe = info.get('trailingPE')
+                
                 return {
                     '股票代號': ticker.split('.')[0],
                     '股票名稱': name,
                     '現價': round(float(latest['Close']), 2),
-                    '成交量(張)': int(latest['Volume'] / 1000),
+                    '單日漲跌幅(%)': round(float(daily_return), 2),
+                    '成交量(張)': int(volume_lots),
                     '資本額(億)': round(capital / 100_000_000, 2),
-                    '每股盈餘(EPS)': round(float(eps), 2)
+                    '每股盈餘(EPS)': round(float(eps), 2) if eps else None,
+                    '本益比': round(float(pe), 2) if pe else None
                 }
     except Exception:
         pass
@@ -72,8 +77,13 @@ def check_stock(ticker, name):
 
 def main():
     tickers_dict = get_all_tw_tickers()
+    
+    # 數量計算與警告印出機制
     if not tickers_dict: 
+        print("【警告】無法獲取全市場代號，啟用備用清單 (共 3 檔)。")
         tickers_dict = {'2330.TW': '台積電', '2317.TW': '鴻海', '2454.TW': '聯發科'}
+    else:
+        print(f"【執行確認】成功獲取市場代號，開始掃描共 {len(tickers_dict)} 檔標的...")
         
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
@@ -87,8 +97,10 @@ def main():
     if results:
         df_results = pd.DataFrame(results)
         df_results.to_json('daily_hot_stocks.json', orient='records', force_ascii=False)
+        print(f"掃描完成，共 {len(results)} 檔符合條件，已輸出至 JSON。")
     else:
         with open('daily_hot_stocks.json', 'w', encoding='utf-8') as f: f.write('[]')
+        print("掃描完成，今日無符合條件標的。")
 
 if __name__ == "__main__":
     main()
