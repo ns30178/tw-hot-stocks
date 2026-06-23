@@ -7,8 +7,18 @@ import time
 import random
 import json
 from datetime import datetime, timezone, timedelta
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 warnings.filterwarnings("ignore")
+
+# 建立全域共用的連線 Session
+global_session = requests.Session()
+retry = Retry(connect=3, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504])
+adapter = HTTPAdapter(max_retries=retry)
+global_session.mount('http://', adapter)
+global_session.mount('https://', adapter)
+global_session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
 
 def get_all_tw_tickers():
     tickers = {}
@@ -16,7 +26,7 @@ def get_all_tw_tickers():
         modes = {'2': '.TW', '4': '.TWO'}
         for mode, suffix in modes.items():
             url = f"https://isin.twse.com.tw/isin/C_public.jsp?strMode={mode}"
-            res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
+            res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
             df = pd.read_html(res.text)[0]
             df.columns = df.iloc[0]
             df = df.iloc[1:]
@@ -34,11 +44,9 @@ def get_all_tw_tickers():
 
 def check_stock(ticker, name):
     try:
-        time.sleep(random.uniform(0.3, 1.0))
-        session = requests.Session()
-        session.headers.update({'User-Agent': 'Mozilla/5.0'})
+        time.sleep(random.uniform(0.1, 0.5)) # 共用 session 且減少 info 請求後，延遲可稍微縮短
         
-        data = yf.download(ticker, period="1y", progress=False, session=session)
+        data = yf.download(ticker, period="1y", progress=False, session=global_session)
         if len(data) < 200: return None
         if isinstance(data.columns, pd.MultiIndex): data.columns = data.columns.droplevel(1)
 
@@ -60,13 +68,10 @@ def check_stock(ticker, name):
         daily_return = ((latest['Close'] - prev['Close']) / prev['Close']) * 100
         volume_lots = latest['Volume'] / 1000
 
-        # === 策略 A (原始策略) ===
-        cond_a_200_high = latest['Close'] >= data['Close'].tail(200).max()
-        cond_a_volume = 50 < volume_lots < 5000
-        is_strategy_a = False
+        # === 策略 A 技術面初步判斷 ===
+        tech_a_pass = (latest['Close'] >= data['Close'].tail(200).max()) and (50 < volume_lots < 5000)
 
-        # === 策略 B (AI進階量化) ===
-        is_strategy_b = False
+        # === 策略 B 技術面初步判斷 ===
         cond_b_price = latest['Close'] > 10
         cond_b_liquidity = latest['VMA5'] / 1000 > 100
         
@@ -84,41 +89,41 @@ def check_stock(ticker, name):
         else:
             cond_b_kline = False
 
+        tech_b_pass = cond_b_price and cond_b_liquidity and cond_b_ma_convergence and cond_b_vol_amp and cond_b_atr_expand and cond_b_kline
+
+        # 關鍵優化：如果兩個策略的技術面都不符合，直接跳過，不浪費時間去抓 stock.info
+        if not (tech_a_pass or tech_b_pass):
+            return None
+
+        # 以下只有技術面達標的少數股票會執行
         stock = yf.Ticker(ticker)
         info = stock.info
-        capital = info.get('sharesOutstanding', 0) * 10
-        book_value = info.get('bookValue', 0)
+        capital = (info.get('sharesOutstanding') or 0) * 10
+        book_value = info.get('bookValue') or 0
         eps = info.get('trailingEps')
         pe = info.get('trailingPE')
 
-        # 產業面翻譯對照 (Yahoo Finance 預設為英文)
-        industry_en = info.get('industry', '未知')
-        ind_map = {
-            'Semiconductors': '半導體', 'Electronic Components': '電子零組件', 
-            'Computer Hardware': '電腦及週邊', 'Communication Equipment': '通信網路',
-            'Electronic Gaming & Multimedia': '光電業', 'Consumer Electronics': '消費電子',
-            'Auto Parts': '汽車零組件', 'Biotechnology': '生技醫療'
-        }
-        industry = ind_map.get(industry_en, industry_en)
-
-        # 產業熱門程度量化 (以成交量相較 5 日均量的爆發倍數定義)
-        vol_ratio = latest['Volume'] / latest['VMA5'] if latest['VMA5'] > 0 else 0
-        if vol_ratio >= 3:
-            heat = "極高"
-        elif vol_ratio >= 1.5:
-            heat = "高"
-        else:
-            heat = "一般"
-
-        if cond_a_200_high and cond_a_volume:
-            if capital < 1_000_000_000 and book_value > 5:
-                is_strategy_a = True
-
-        if cond_b_price and cond_b_liquidity and cond_b_ma_convergence and cond_b_vol_amp and cond_b_atr_expand and cond_b_kline:
-            if capital < 5_000_000_000:
-                is_strategy_b = True
+        is_strategy_a = tech_a_pass and (capital < 1_000_000_000) and (book_value > 5)
+        is_strategy_b = tech_b_pass and (capital < 5_000_000_000)
 
         if is_strategy_a or is_strategy_b:
+            industry_en = info.get('industry', '未知')
+            ind_map = {
+                'Semiconductors': '半導體', 'Electronic Components': '電子零組件', 
+                'Computer Hardware': '電腦及週邊', 'Communication Equipment': '通信網路',
+                'Electronic Gaming & Multimedia': '光電業', 'Consumer Electronics': '消費電子',
+                'Auto Parts': '汽車零組件', 'Biotechnology': '生技醫療'
+            }
+            industry = ind_map.get(industry_en, industry_en)
+
+            vol_ratio = latest['Volume'] / latest['VMA5'] if latest['VMA5'] > 0 else 0
+            if vol_ratio >= 3:
+                heat = "極高"
+            elif vol_ratio >= 1.5:
+                heat = "高"
+            else:
+                heat = "一般"
+
             return {
                 'stock_data': {
                     '股票代號': ticker.split('.')[0],
@@ -152,7 +157,7 @@ def main():
     results_original = []
     results_ai = []
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
         futures = {executor.submit(check_stock, t, n): t for t, n in tickers_dict.items()}
         for future in concurrent.futures.as_completed(futures):
             res = future.result()
