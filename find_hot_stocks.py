@@ -9,6 +9,7 @@ import random
 warnings.filterwarnings("ignore")
 
 def get_all_tw_tickers():
+    """獲取上市櫃股票代號，過濾 5 碼異常代號"""
     tickers = {}
     try:
         modes = {'2': '.TW', '4': '.TWO'}
@@ -44,7 +45,7 @@ def check_stock(ticker, name):
         data['VMA5'] = data['Volume'].rolling(window=5).mean()
         latest = data.iloc[-1]
 
-        # 篩選邏輯
+        # 趨勢與量能條件
         cond_trend = (latest['Close'] >= data['Close'].tail(200).max()) and (latest['Close'] > latest['MA20'])
         cond_volume = (latest['Volume'] > 50000) and (latest['Volume'] < 5000000) and (latest['Volume'] > (latest['VMA5'] * 2))
         
@@ -71,15 +72,23 @@ def check_stock(ticker, name):
 
 def main():
     tickers_dict = get_all_tw_tickers()
+    if not tickers_dict: 
+        tickers_dict = {'2330.TW': '台積電', '2317.TW': '鴻海', '2454.TW': '聯發科'}
+        
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(check_stock, t, n): t for t, n in tickers_dict.items()}
         for future in concurrent.futures.as_completed(futures):
             res = future.result()
-            if res: results.append(res)
+            if res: 
+                results.append(res)
+                print(f"發現標的: {res['股票代號']} {res['股票名稱']}")
 
-    df_results = pd.DataFrame(results)
-    df_results.to_json('daily_hot_stocks.json', orient='records', force_ascii=False)
+    if results:
+        df_results = pd.DataFrame(results)
+        df_results.to_json('daily_hot_stocks.json', orient='records', force_ascii=False)
+    else:
+        with open('daily_hot_stocks.json', 'w', encoding='utf-8') as f: f.write('[]')
 
 if __name__ == "__main__":
     main()
