@@ -15,13 +15,17 @@
             <li>最新淨值 > 5 元</li>
             <li>成交量張數 < 5000 張</li>
             <li>成交量張數 > 50 張</li>
+            <li>價格距離50日均線 20% ~ 30%</li>
         </ul>
     </div>
 
     <div class="max-w-6xl mx-auto bg-white p-6 rounded shadow-md">
         <div class="flex flex-col md:flex-row justify-between items-center mb-6">
             <h1 class="text-2xl font-bold text-gray-800 mb-2 md:mb-0">篩選結果</h1>
-            <span id="update-time" class="text-sm text-gray-500"></span>
+            <div class="text-right">
+                <div id="backend-update-time" class="text-sm font-bold text-blue-600">資料更新時間：讀取中...</div>
+                <div id="view-time" class="text-xs text-gray-400 mt-1"></div>
+            </div>
         </div>
 
         <div id="loading" class="py-12 flex flex-col items-center justify-center">
@@ -111,8 +115,9 @@
             renderTable(stockData);
         }
 
+        // 當前檢視時間
         const now = new Date();
-        document.getElementById('update-time').innerText = `檢視時間：${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+        document.getElementById('view-time').innerText = `網頁載入時間：${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
         let jsonUrl = 'daily_hot_stocks.json';
         if (window.location.protocol === 'blob:' || window.location.href.includes('googleusercontent')) {
@@ -124,16 +129,26 @@
                 if (!r.ok) throw new Error('無法讀取資料');
                 return r.json();
             })
-            .then(data => {
+            .then(response => {
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('table-container').classList.remove('hidden');
-                stockData = data;
+                
+                // 相容新舊 JSON 結構 (陣列或物件)
+                if (Array.isArray(response)) {
+                    stockData = response;
+                    document.getElementById('backend-update-time').innerText = '資料更新時間：未知 (舊版格式)';
+                } else {
+                    stockData = response.data || [];
+                    document.getElementById('backend-update-time').innerText = `資料更新時間：${response.update_time || '未知'}`;
+                }
+                
                 renderTable(stockData);
             })
             .catch(err => {
                 console.error(err);
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('table-container').classList.remove('hidden');
+                document.getElementById('backend-update-time').innerText = '資料更新時間：讀取失敗';
                 document.getElementById('body').innerHTML = '<tr><td colspan="8" class="py-8 text-center text-red-500">資料讀取失敗，請確認檔案是否存在</td></tr>';
             });
     </script>
