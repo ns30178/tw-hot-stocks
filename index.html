@@ -2,133 +2,55 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>台股飆股觀測站</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 text-gray-800 font-sans min-h-screen p-4 md:p-8">
-    <div class="max-w-6xl mx-auto bg-white rounded-xl shadow-md overflow-hidden">
-        <div class="p-6 bg-blue-900 text-white flex justify-between items-center">
-            <h1 class="text-2xl font-bold">台股飆股自動篩選結果</h1>
-            <span id="update-time" class="text-sm text-blue-200">資料載入中...</span>
-        </div>
-        
-        <div class="p-6">
-            <div id="loading" class="text-center py-10 text-gray-500">
-                <svg class="animate-spin h-8 w-8 mx-auto mb-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                正在讀取最新盤後資料...
-            </div>
-
-            <div id="error-message" class="hidden text-center py-10 text-red-500">
-                無法載入資料，請確認 daily_hot_stocks.json 是否存在且格式正確。
-            </div>
-
-            <div id="no-data" class="hidden text-center py-10 text-gray-600">
-                本日無符合篩選條件之標的。
-            </div>
-
-            <div id="table-container" class="hidden overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">股票代號</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">股票名稱</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">現價</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">單日漲跌幅(%)</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">成交量(張)</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">資本額(億)</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">最新淨值</th>
-                        </tr>
-                    </thead>
-                    <tbody id="stock-table-body" class="bg-white divide-y divide-gray-200">
-                    </tbody>
-                </table>
-            </div>
-            
-            <div class="mt-6 text-sm text-gray-500">
-                <h3 class="font-bold mb-2">篩選條件：</h3>
-                <ul class="list-disc list-inside space-y-1">
-                    <li>收盤價大於 20MA 及 60MA，且 20MA > 60MA</li>
-                    <li>200日內創新高</li>
-                    <li>單日漲幅 > 5%</li>
-                    <li>當日成交量 > 5日均量2倍</li>
-                    <li>成交量介於 50 ~ 5000 張之間</li>
-                    <li>資本額 &lt; 10 億</li>
-                    <li>最新淨值 > 5 元</li>
-                </ul>
-            </div>
-        </div>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-6xl mx-auto bg-white p-6 rounded shadow">
+        <h1 class="text-xl font-bold mb-4">篩選結果</h1>
+        <table class="w-full text-left">
+            <thead>
+                <tr class="border-b">
+                    <th class="py-2">代號</th>
+                    <th class="py-2">名稱</th>
+                    <th class="py-2">現價</th>
+                    <th class="py-2">成交量(張)</th>
+                    <th class="py-2">資本額(億)</th>
+                    <th class="py-2">EPS</th>
+                </tr>
+            </thead>
+            <tbody id="body"></tbody>
+        </table>
     </div>
-
     <script>
-        document.addEventListener('DOMContentLoaded', async () => {
-            const loadingEl = document.getElementById('loading');
-            const errorEl = document.getElementById('error-message');
-            const noDataEl = document.getElementById('no-data');
-            const tableContainerEl = document.getElementById('table-container');
-            const tbodyEl = document.getElementById('stock-table-body');
-            const timeEl = document.getElementById('update-time');
-
-            try {
-                let data = [];
-                const isPreview = window.location.protocol === 'blob:' || window.location.href.includes('googleusercontent');
-                
-                if (isPreview) {
-                    data = [
-                        { '股票代號': '3324', '股票名稱': '雙鴻', '現價': 50.20, '單日漲跌幅(%)': 6.50, '成交量(張)': 1200, '資本額(億)': 5.50, '最新淨值': 12.30 },
-                        { '股票代號': '5432', '股票名稱': '新門', '現價': 80.00, '單日漲跌幅(%)': 9.80, '成交量(張)': 4500, '資本額(億)': 8.20, '最新淨值': 25.10 },
-                        { '股票代號': '6677', '股票名稱': '微穎', '現價': 120.50, '單日漲跌幅(%)': 5.10, '成交量(張)': 850, '資本額(億)': 3.10, '最新淨值': 45.60 }
-                    ];
-                    timeEl.textContent = '預覽模式：展示模擬資料';
-                } else {
-                    const response = await fetch('daily_hot_stocks.json');
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    data = await response.json();
-                    
-                    const now = new Date();
-                    timeEl.textContent = `最後更新時間：${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()}`;
-                }
-                
-                loadingEl.classList.add('hidden');
-
-                if (data.length === 0) {
-                    noDataEl.classList.remove('hidden');
+        // 改用最基礎的 fetch 請求方式，完全避免使用 URL 建構函數，解決 Blob URL 解析錯誤
+        fetch('daily_hot_stocks.json')
+            .then(r => {
+                if (!r.ok) throw new Error('無法讀取資料');
+                return r.json();
+            })
+            .then(data => {
+                const body = document.getElementById('body');
+                if (!data || data.length === 0) {
+                    body.innerHTML = '<tr><td colspan="6" class="py-4 text-center text-gray-500">目前無符合篩選條件的標的</td></tr>';
                     return;
                 }
-
-                tbodyEl.innerHTML = '';
-                data.forEach(stock => {
-                    const row = document.createElement('tr');
-                    row.className = "hover:bg-gray-50 transition-colors";
-                    
-                    const returnColorClass = stock['單日漲跌幅(%)'] > 0 ? 'text-red-600 font-bold' : (stock['單日漲跌幅(%)'] < 0 ? 'text-green-600 font-bold' : 'text-gray-900');
-
-                    row.innerHTML = `
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">${stock['股票代號']}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${stock['股票名稱']}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${stock['現價'].toFixed(2)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm ${returnColorClass}">${stock['單日漲跌幅(%)'].toFixed(2)}%</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${stock['成交量(張)'].toLocaleString()}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${stock['資本額(億)'].toFixed(2)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${stock['最新淨值'].toFixed(2)}</td>
-                    `;
-                    tbodyEl.appendChild(row);
+                body.innerHTML = '';
+                data.forEach(s => {
+                    body.innerHTML += `<tr class="border-b">
+                        <td class="py-2">${s['股票代號'] || '-'}</td>
+                        <td class="py-2">${s['股票名稱'] || '-'}</td>
+                        <td class="py-2">${s['現價'] || '-'}</td>
+                        <td class="py-2">${s['成交量(張)'] || '-'}</td>
+                        <td class="py-2">${s['資本額(億)'] || '-'}</td>
+                        <td class="py-2">${s['每股盈餘(EPS)'] || '-'}</td>
+                    </tr>`;
                 });
-
-                tableContainerEl.classList.remove('hidden');
-
-            } catch (error) {
-                console.error('Error fetching data:', error);
-                loadingEl.classList.add('hidden');
-                errorEl.classList.remove('hidden');
-                timeEl.textContent = '更新失敗';
-            }
-        });
+            })
+            .catch(err => {
+                console.error(err);
+                document.getElementById('body').innerHTML = '<tr><td colspan="6" class="py-4 text-center text-red-500">資料讀取失敗，請確認檔案是否存在於正確目錄</td></tr>';
+            });
     </script>
 </body>
 </html>
