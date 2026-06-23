@@ -42,21 +42,17 @@ def check_stock(ticker, name):
         if len(data) < 200: return None
         if isinstance(data.columns, pd.MultiIndex): data.columns = data.columns.droplevel(1)
 
-        data['MA50'] = data['Close'].rolling(window=50).mean()
         latest = data.iloc[-1]
         prev = data.iloc[-2] if len(data) > 1 else latest
         
         daily_return = ((latest['Close'] - prev['Close']) / prev['Close']) * 100
         volume_lots = latest['Volume'] / 1000
 
-        # 策略條件：200日新高、成交量 50~5000張、距離50日均線 20%~30% (絕對值)
+        # 策略條件：200日新高、成交量 50~5000張
         cond_200_high = latest['Close'] >= data['Close'].tail(200).max()
         cond_volume = 50 < volume_lots < 5000
         
-        distance_ma50 = abs(latest['Close'] - latest['MA50']) / latest['MA50']
-        cond_ma50 = 0.20 <= distance_ma50 <= 0.30
-        
-        if cond_200_high and cond_volume and cond_ma50:
+        if cond_200_high and cond_volume:
             stock = yf.Ticker(ticker)
             info = stock.info
             capital = info.get('sharesOutstanding', 0) * 10
