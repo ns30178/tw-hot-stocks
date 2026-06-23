@@ -2,58 +2,35 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>台股雙策略觀測站</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 p-4">
-    <div class="max-w-6xl mx-auto mb-6">
-        <h1 class="text-3xl font-extrabold text-gray-800">台股雙策略觀測站</h1>
-        <div id="backend-update-time" class="text-sm font-bold text-blue-600 mt-2">狀態：準備讀取...</div>
-    </div>
-
-    <div id="loading" class="max-w-6xl mx-auto py-12 flex flex-col items-center justify-center bg-white rounded shadow-md">
-        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
-        <p class="mt-4 text-gray-500">正在讀取資料，若持續轉圈請檢查行動網路...</p>
-    </div>
-
-    <div id="error-debug" class="hidden max-w-6xl mx-auto p-4 bg-red-100 text-red-700 rounded mt-4">
-        <h2 class="font-bold">讀取失敗 (除錯資訊):</h2>
-        <pre id="error-content" class="text-xs overflow-auto mt-2"></pre>
-    </div>
-
-    <div id="data-container" class="hidden max-w-6xl mx-auto bg-white p-6 rounded shadow-md">
-        <h2 class="text-xl font-bold mb-4">資料已載入</h2>
-        <div id="table-content"></div>
+    <div id="status-msg" class="text-center py-10 text-gray-500">正在檢查資料狀態...</div>
+    <div id="content" class="hidden max-w-6xl mx-auto">
+        <h1 class="text-2xl font-bold mb-4">資料載入成功</h1>
+        <div id="debug-info"></div>
     </div>
 
     <script>
-        // 強制使用相對路徑，避免網域名稱解析錯誤
-        const jsonPath = 'daily_hot_stocks.json?t=' + new Date().getTime();
+        // 絕對路徑，確保抓取的是正確檔案
+        const FILE_URL = 'daily_hot_stocks.json?t=' + new Date().getTime();
 
-        fetch(jsonPath)
-            .then(response => {
-                if (!response.ok) throw new Error('HTTP 錯誤: ' + response.status);
-                return response.text(); // 先讀取成純文字，不要直接轉 JSON
-            })
+        fetch(FILE_URL)
+            .then(res => res.text())
             .then(text => {
-                try {
-                    const data = JSON.parse(text);
-                    document.getElementById('loading').classList.add('hidden');
-                    document.getElementById('data-container').classList.remove('hidden');
-                    document.getElementById('backend-update-time').innerText = `資料更新時間：${data.update_time}`;
-                    // 渲染邏輯...
-                } catch (e) {
-                    // 如果解析失敗，直接把讀到的內容顯示出來
-                    document.getElementById('loading').classList.add('hidden');
-                    document.getElementById('error-debug').classList.remove('hidden');
-                    document.getElementById('error-content').innerText = "這不是 JSON 格式，內容為:\n" + text;
+                // 如果讀到的內容開頭是 <，代表讀到 HTML 了 (通常是 404 頁面)
+                if (text.trim().startsWith('<')) {
+                    throw new Error("錯誤：讀取到的是 HTML 網頁，代表檔案路徑可能錯誤，或者 GitHub Pages 還沒部署好。");
                 }
+                const data = JSON.parse(text);
+                document.getElementById('status-msg').classList.add('hidden');
+                document.getElementById('content').classList.remove('hidden');
+                console.log("資料正確:", data);
             })
             .catch(err => {
-                document.getElementById('loading').classList.add('hidden');
-                document.getElementById('error-debug').classList.remove('hidden');
-                document.getElementById('error-content').innerText = err.message;
+                document.getElementById('status-msg').innerText = "讀取失敗: " + err.message;
+                console.error(err);
             });
     </script>
 </body>
