@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>台股飆股雙策略觀測站</title>
+    <title>台股雙策略觀測站</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 p-4 md:p-8">
-    
+<body class="bg-gray-100 p-4">
     <div class="max-w-6xl mx-auto mb-6">
         <h1 class="text-3xl font-extrabold text-gray-800">台股雙策略觀測站</h1>
         <p class="text-gray-600 mt-2" id="update-time">資料更新時間：讀取中...</p>
@@ -24,7 +23,7 @@
     </div>
 
     <div class="max-w-6xl mx-auto bg-white p-6 rounded shadow-md mb-8 border-t-4 border-emerald-500">
-        <h2 class="text-xl font-bold text-emerald-700 mb-4">Ai選股策略</h2>
+        <h2 class="text-xl font-bold text-emerald-700 mb-4">AI 選股策略</h2>
         <div class="overflow-x-auto">
             <table class="w-full text-left">
                 <thead><tr class="border-b bg-emerald-50 text-gray-600 text-sm"><th class="p-2">代號</th><th class="p-2">名稱</th><th class="p-2">現價</th><th class="p-2">漲跌幅%</th></tr></thead>
@@ -44,20 +43,24 @@
     </div>
 
     <script>
-        // 渲染表格的通用函數
         function renderTable(tableId, data) {
             const body = document.getElementById('body-' + tableId);
             if (!body) return;
-            if (data.length === 0) {
-                body.innerHTML = '<tr><td colspan="4" class="p-4 text-gray-500 text-center">目前無符合標的</td></tr>';
+            
+            // 如果沒有資料，顯示「無符合標的」字樣，但保留表格結構
+            if (!data || data.length === 0) {
+                body.innerHTML = '<tr><td colspan="4" class="p-4 text-gray-400 text-center italic">目前無符合條件的標的</td></tr>';
                 return;
             }
+
             body.innerHTML = data.map(s => `
                 <tr class="border-b hover:bg-gray-50">
-                    <td class="p-2">${s['股票代號'] || '-'}</td>
-                    <td class="p-2 font-bold">${s['股票名稱'] || '-'}</td>
-                    <td class="p-2">${s['現價'] || '-'}</td>
-                    <td class="p-2 ${s['單日漲跌幅(%)'] > 0 ? 'text-red-500' : 'text-green-500'}">${s['單日漲跌幅(%)'] || '-'}%</td>
+                    <td class="p-2 text-sm">${s['股票代號'] || '-'}</td>
+                    <td class="p-2 font-bold text-gray-800">${s['股票名稱'] || '-'}</td>
+                    <td class="p-2 text-sm">${s['現價'] || '-'}</td>
+                    <td class="p-2 text-sm ${s['單日漲跌幅(%)'] > 0 ? 'text-red-500' : 'text-green-500'}">
+                        ${s['單日漲跌幅(%)'] > 0 ? '+' : ''}${s['單日漲跌幅(%)'] || '-'}%
+                    </td>
                 </tr>
             `).join('');
         }
@@ -69,14 +72,14 @@
             .then(data => {
                 document.getElementById('update-time').innerText = "資料更新時間：" + data.update_time;
                 
-                // 將資料分別塞入對應表格
+                // 分別渲染三個區塊
                 renderTable('original_strategy', data.original_strategy);
                 renderTable('ai_strategy', data.ai_strategy);
                 renderTable('intersection', data.intersection);
             })
             .catch(err => {
                 console.error(err);
-                document.getElementById('update-time').innerText = "讀取失敗，請稍後再試";
+                document.getElementById('update-time').innerText = "讀取失敗，請確認網路環境";
             });
     </script>
 </body>
