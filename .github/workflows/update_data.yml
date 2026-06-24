@@ -2,6 +2,7 @@ name: Update Hot Stocks Data
 
 on:
   schedule:
+    # UTC 08:00 對應台灣時間 16:00，週一至週五執行
     - cron: '0 8 * * 1-5'
   workflow_dispatch:
 
@@ -26,19 +27,15 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install yfinance pandas requests lxml html5lib urllib3
+        pip install yfinance pandas requests lxml html5lib
 
-    - name: Run stock screener
+    - name: Run script
       run: python find_hot_stocks.py
 
     - name: Commit and push changes
       run: |
-        git config --global user.name "GitHub Action Bot"
-        git config --global user.email "action@github.com"
-        
-        # 顯示檔案位置確保確認無誤
-        ls -la daily_hot_stocks.json
-        
-        # 直接加入並推播
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
         git add daily_hot_stocks.json
-        git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update stock data" && git push)
+        git commit -m "Auto update daily_hot_stocks.json" || echo "No changes to commit"
+        git push
