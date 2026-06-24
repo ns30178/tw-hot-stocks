@@ -2,8 +2,8 @@ name: Update Hot Stocks Data
 
 on:
   schedule:
-    # UTC 08:00 對應台灣時間 16:00，週一至週五執行
-    - cron: '0 8 * * 1-5'
+    # 改為 UTC 08:13 (台灣時間 16:13)，避開整點伺服器塞車，週一至週五執行
+    - cron: '13 8 * * 1-5'
   workflow_dispatch:
 
 permissions:
