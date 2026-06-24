@@ -44,7 +44,7 @@ def get_all_tw_tickers():
 
 def check_stock(ticker, name):
     try:
-        time.sleep(random.uniform(0.1, 0.5)) # 共用 session 且減少 info 請求後，延遲可稍微縮短
+        time.sleep(random.uniform(0.1, 0.5)) 
         
         data = yf.download(ticker, period="1y", progress=False, session=global_session)
         if len(data) < 200: return None
@@ -68,10 +68,10 @@ def check_stock(ticker, name):
         daily_return = ((latest['Close'] - prev['Close']) / prev['Close']) * 100
         volume_lots = latest['Volume'] / 1000
 
-        # === 策略 A 技術面初步判斷 ===
+        # === 策略 A ===
         tech_a_pass = (latest['Close'] >= data['Close'].tail(200).max()) and (50 < volume_lots < 5000)
 
-        # === 策略 B 技術面初步判斷 ===
+        # === 策略 B ===
         cond_b_price = latest['Close'] > 10
         cond_b_liquidity = latest['VMA5'] / 1000 > 100
         
@@ -91,11 +91,9 @@ def check_stock(ticker, name):
 
         tech_b_pass = cond_b_price and cond_b_liquidity and cond_b_ma_convergence and cond_b_vol_amp and cond_b_atr_expand and cond_b_kline
 
-        # 關鍵優化：如果兩個策略的技術面都不符合，直接跳過，不浪費時間去抓 stock.info
         if not (tech_a_pass or tech_b_pass):
             return None
 
-        # 以下只有技術面達標的少數股票會執行
         stock = yf.Ticker(ticker)
         info = stock.info
         capital = (info.get('sharesOutstanding') or 0) * 10
@@ -163,12 +161,13 @@ def main():
             res = future.result()
             if res:
                 s_data = res['stock_data']
+                # 修正點：移除 elif，改為獨立判斷，確保股票在各區塊都會正常出現
+                if res['is_a']:
+                    results_original.append(s_data)
+                if res['is_b']:
+                    results_ai.append(s_data)
                 if res['is_a'] and res['is_b']:
                     results_intersection.append(s_data)
-                elif res['is_a']:
-                    results_original.append(s_data)
-                elif res['is_b']:
-                    results_ai.append(s_data)
 
     tz_tw = timezone(timedelta(hours=8))
     update_time_str = datetime.now(tz_tw).strftime("%Y-%m-%d %H:%M:%S")
