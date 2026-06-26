@@ -159,7 +159,9 @@ def get_streak(code, list_name, prev_data):
 def main():
     # 1. 載入前次歷史資料
     previous_data = {"update_date": "無", "original_strategy": [], "ai_strategy": [], "intersection": []}
-    if os.path.exists('daily_hot_stocks.json'):
+    
+    # 【防呆機制】：確保檔案存在，且檔案大小大於 0 byte 才去讀取
+    if os.path.exists('daily_hot_stocks.json') and os.path.getsize('daily_hot_stocks.json') > 0:
         try:
             with open('daily_hot_stocks.json', 'r', encoding='utf-8') as f:
                 old_json = json.load(f)
