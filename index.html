@@ -116,7 +116,16 @@
                     "Stochastic@tv-basicstudies",
                     "MACD@tv-basicstudies"
                 ],
-                "container_id": "tv_chart_container"
+                "container_id": "tv_chart_container",
+                // 核心修正：翻轉色調，完美符合台股習慣（紅漲綠跌）
+                "overrides": {
+                    "mainSeriesProperties.candleStyle.upColor": "#f23645",        // 上漲改為亮紅
+                    "mainSeriesProperties.candleStyle.borderUpColor": "#f23645",  // 上漲外框改紅
+                    "mainSeriesProperties.candleStyle.wickUpColor": "#f23645",    // 上漲影線改紅
+                    "mainSeriesProperties.candleStyle.downColor": "#089981",      // 下跌改為亮綠
+                    "mainSeriesProperties.candleStyle.borderDownColor": "#089981",// 下跌外框改綠
+                    "mainSeriesProperties.candleStyle.wickDownColor": "#089981"   // 下跌影線改綠
+                }
             });
         }
 
