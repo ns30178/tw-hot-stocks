@@ -5,69 +5,148 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>台股雙策略觀測站</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
 </head>
-<body class="bg-gray-100 p-4 md:p-8">
+<body class="bg-gray-100 p-4 md:p-8 relative">
+
     <div class="max-w-6xl mx-auto mb-6">
         <h1 class="text-3xl font-extrabold text-gray-800">台股雙策略觀測站</h1>
-        <p class="text-gray-600 mt-2" id="update-time">資料更新時間：讀取中...</p>
+        <p class="text-gray-600 mt-2 font-bold" id="update-time">資料更新時間：讀取中...</p>
+    </div>
+
+    <div id="latest-section" class="max-w-6xl mx-auto mb-10">
+        <h2 class="text-2xl font-bold text-gray-800 mb-4 border-l-4 border-gray-800 pl-3" id="latest-date">資料時間：今日</h2>
+        <div id="latest-original"></div>
+        <div id="latest-ai"></div>
+        <div id="latest-intersection"></div>
+    </div>
+
+    <div id="previous-section" class="max-w-6xl mx-auto mb-10 opacity-80">
+        <h2 class="text-2xl font-bold text-gray-600 mb-4 border-l-4 border-gray-400 pl-3" id="previous-date">資料時間：前次</h2>
+        <div id="previous-original"></div>
+        <div id="previous-ai"></div>
+        <div id="previous-intersection"></div>
+    </div>
+
+    <div id="tv-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
+        <div class="bg-gray-900 w-full max-w-5xl h-[80vh] rounded-lg shadow-2xl relative flex flex-col">
+            <button onclick="closeModal()" class="absolute -top-4 -right-4 bg-red-600 text-white rounded-full w-10 h-10 text-xl font-bold border-2 border-white hover:bg-red-700 z-50">&times;</button>
+            <div id="tv_chart_container" class="flex-1 w-full h-full rounded-lg overflow-hidden"></div>
+        </div>
     </div>
 
     <script>
-        const COLS = ['代號', '名稱', '產業', '熱度', '現價', '漲幅%', '量(張)', 'EPS', '本益比'];
-        function createTableSection(title, colorClass, tbodyId) {
-            document.write(`
-                <div class="max-w-6xl mx-auto bg-white p-6 rounded shadow-md mb-8 border-t-4 ${colorClass}">
-                    <h2 class="text-xl font-bold mb-4">${title}</h2>
-                    <div class="overflow-x-auto"><table class="w-full text-left text-sm whitespace-nowrap">
-                        <thead><tr class="border-b bg-gray-50 text-gray-600">
-                            ${COLS.map(c => `<th class="p-2">${c}</th>`).join('')}
-                        </tr></thead>
-                        <tbody id="${tbodyId}"></tbody>
-                    </table></div>
-                </div>
-            `);
-        }
-    </script>
+        // RWD 隱藏設定：產業、量、乖離率、營收YoY 在手機版隱藏
+        const COLS = [
+            { name: '代號', class: '' },
+            { name: '名稱', class: '' },
+            { name: '天數', class: '' },
+            { name: '產業', class: 'hidden md:table-cell' },
+            { name: '熱度', class: 'hidden md:table-cell' },
+            { name: '現價', class: '' },
+            { name: '漲幅%', class: '' },
+            { name: '量(張)', class: 'hidden md:table-cell' },
+            { name: '乖離率%', class: 'hidden md:table-cell' },
+            { name: '營收YoY', class: 'hidden md:table-cell' }
+        ];
 
-    <script>
-        createTableSection('飆股策略', 'border-blue-500', 'body-original_strategy');
-        createTableSection('AI 選股策略', 'border-emerald-500', 'body-ai_strategy');
-        createTableSection('核心交集標的', 'border-purple-500', 'body-intersection');
-    </script>
-
-    <script>
-        function renderTable(tbodyId, data) {
-            const tbody = document.getElementById(tbodyId);
+        function createTableHTML(title, colorClass, data) {
+            let tbody = '';
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="p-4 text-gray-400 text-center italic">無符合條件標的</td></tr>';
-                return;
+                tbody = '<tr><td colspan="10" class="p-4 text-gray-400 text-center italic">無符合條件標的</td></tr>';
+            } else {
+                tbody = data.map(s => {
+                    const isLimitUp = s['單日漲跌幅(%)'] >= 9.9;
+                    const limitUpClass = isLimitUp ? 'bg-red-600 text-white font-bold' : '';
+                    const heatClass = s['熱門程度'] === '極高' ? 'text-red-600 font-bold' : 'text-gray-600';
+                    const upDownClass = isLimitUp ? 'text-white' : (s['單日漲跌幅(%)'] > 0 ? 'text-red-500' : 'text-green-500');
+                    const symbolClick = `onclick="openModal('${s['交易所']}', '${s['股票代號']}')"`;
+                    
+                    return `
+                    <tr class="border-b hover:bg-gray-50 transition-colors">
+                        <td class="p-2 cursor-pointer hover:underline ${limitUpClass}" ${symbolClick}>${s['股票代號'] || '-'}</td>
+                        <td class="p-2 cursor-pointer hover:underline font-bold ${limitUpClass}" ${symbolClick}>${s['股票名稱'] || '-'}</td>
+                        <td class="p-2 text-center font-bold text-blue-600">${s['進榜天數'] || 1}</td>
+                        <td class="p-2 hidden md:table-cell">${s['產業面'] || '-'}</td>
+                        <td class="p-2 hidden md:table-cell ${heatClass}">${s['熱門程度'] || '-'}</td>
+                        <td class="p-2 font-bold">${s['現價'] || '-'}</td>
+                        <td class="p-2 font-bold ${upDownClass}">
+                            ${s['單日漲跌幅(%)'] ? (s['單日漲跌幅(%)'] > 0 ? '+' : '') + s['單日漲跌幅(%)'] : '-'}
+                        </td>
+                        <td class="p-2 hidden md:table-cell">${s['成交量(張)'] || '-'}</td>
+                        <td class="p-2 hidden md:table-cell">${s['乖離率(%)'] !== null ? s['乖離率(%)'] : '-'}</td>
+                        <td class="p-2 hidden md:table-cell">${s['營收YoY(%)'] !== null ? s['營收YoY(%)'] + '%' : '-'}</td>
+                    </tr>
+                `}).join('');
             }
-            tbody.innerHTML = data.map(s => `
-                <tr class="border-b hover:bg-gray-50">
-                    <td class="p-2">${s['股票代號'] || '-'}</td>
-                    <td class="p-2 font-bold">${s['股票名稱'] || '-'}</td>
-                    <td class="p-2">${s['產業面'] || '-'}</td>
-                    <td class="p-2 font-bold ${s['熱門程度'] === '極高' ? 'text-red-600' : 'text-gray-600'}">${s['熱門程度'] || '-'}</td>
-                    <td class="p-2">${s['現價'] || '-'}</td>
-                    <td class="p-2 ${s['單日漲跌幅(%)'] > 0 ? 'text-red-500' : 'text-green-500'}">
-                        ${s['單日漲跌幅(%)'] ? (s['單日漲跌幅(%)'] > 0 ? '+' : '') + s['單日漲跌幅(%)'] + '%' : '-'}
-                    </td>
-                    <td class="p-2">${s['成交量(張)'] || '-'}</td>
-                    <td class="p-2">${s['每股盈餘(EPS)'] || '-'}</td>
-                    <td class="p-2">${s['本益比'] || '-'}</td>
-                </tr>
-            `).join('');
+
+            return `
+                <div class="bg-white p-4 md:p-6 rounded shadow-md mb-6 border-t-4 ${colorClass}">
+                    <h3 class="text-xl font-bold mb-4">${title}</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
+                            <thead>
+                                <tr class="border-b bg-gray-50 text-gray-600">
+                                    ${COLS.map(c => `<th class="p-2 ${c.class}">${c.name}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>${tbody}</tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        function openModal(exchange, code) {
+            document.getElementById('tv-modal').classList.remove('hidden');
+            document.getElementById('tv_chart_container').innerHTML = ''; // 清空舊圖表
+            new TradingView.widget({
+                "autosize": true,
+                "symbol": `${exchange}:${code}`,
+                "interval": "D",
+                "timezone": "Asia/Taipei",
+                "theme": "dark",
+                "style": "1",
+                "locale": "zh_TW",
+                "enable_publishing": false,
+                "hide_top_toolbar": false,
+                "allow_symbol_change": false,
+                "studies": [
+                    "Volume@tv-basicstudies",
+                    "Stochastic@tv-basicstudies",
+                    "MACD@tv-basicstudies"
+                ],
+                "container_id": "tv_chart_container"
+            });
+        }
+
+        function closeModal() {
+            document.getElementById('tv-modal').classList.add('hidden');
+            document.getElementById('tv_chart_container').innerHTML = '';
         }
 
         fetch('daily_hot_stocks.json?t=' + new Date().getTime())
             .then(res => res.json())
             .then(data => {
                 document.getElementById('update-time').innerText = "資料更新時間：" + (data.update_time || '未知');
-                renderTable('body-original_strategy', data.original_strategy);
-                renderTable('body-ai_strategy', data.ai_strategy);
-                renderTable('body-intersection', data.intersection);
+                
+                // 渲染今日最新資料
+                if(data.latest_data) {
+                    document.getElementById('latest-date').innerText = "資料時間：" + (data.latest_data.update_date || '未知');
+                    document.getElementById('latest-original').innerHTML = createTableHTML('飆股策略', 'border-blue-500', data.latest_data.original_strategy);
+                    document.getElementById('latest-ai').innerHTML = createTableHTML('AI 選股策略', 'border-emerald-500', data.latest_data.ai_strategy);
+                    document.getElementById('latest-intersection').innerHTML = createTableHTML('核心交集標的', 'border-purple-500', data.latest_data.intersection);
+                }
+
+                // 渲染前次資料
+                if(data.previous_data) {
+                    document.getElementById('previous-date').innerText = "資料時間：" + (data.previous_data.update_date || '無');
+                    document.getElementById('previous-original').innerHTML = createTableHTML('飆股策略', 'border-blue-300', data.previous_data.original_strategy);
+                    document.getElementById('previous-ai').innerHTML = createTableHTML('AI 選股策略', 'border-emerald-300', data.previous_data.ai_strategy);
+                    document.getElementById('previous-intersection').innerHTML = createTableHTML('核心交集標的', 'border-purple-300', data.previous_data.intersection);
+                }
             })
-            .catch(err => { console.error(err); });
+            .catch(err => { console.error('Fetch error:', err); });
     </script>
 </body>
 </html>
