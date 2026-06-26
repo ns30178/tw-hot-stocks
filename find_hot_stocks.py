@@ -6,13 +6,13 @@ import requests
 import time
 import random
 import json
+import os
 from datetime import datetime, timezone, timedelta
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 warnings.filterwarnings("ignore")
 
-# 建立全域共用的連線 Session
 global_session = requests.Session()
 retry = Retry(connect=3, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504])
 adapter = HTTPAdapter(max_retries=retry)
@@ -32,7 +32,7 @@ def get_all_tw_tickers():
             df = df.iloc[1:]
             for _, row in df.iterrows():
                 raw_data = str(row['有價證券代號及名稱'])
-                parts = raw_data.split('　')
+                parts = raw_data.split(' ')
                 if len(parts) >= 2:
                     code = parts[0].strip()
                     name = parts[1].strip()
@@ -68,8 +68,8 @@ def check_stock(ticker, name):
         daily_return = ((latest['Close'] - prev['Close']) / prev['Close']) * 100
         volume_lots = latest['Volume'] / 1000
 
-        # === 策略 A ===
-        tech_a_pass = (latest['Close'] >= data['Close'].tail(200).max()) and (50 < volume_lots < 5000)
+        # === 策略 A：流動性門檻調高至 500 張 ===
+        tech_a_pass = (latest['Close'] >= data['Close'].tail(200).max()) and (500 <= volume_lots <= 5000)
 
         # === 策略 B ===
         cond_b_price = latest['Close'] > 10
@@ -98,8 +98,11 @@ def check_stock(ticker, name):
         info = stock.info
         capital = (info.get('sharesOutstanding') or 0) * 10
         book_value = info.get('bookValue') or 0
-        eps = info.get('trailingEps')
-        pe = info.get('trailingPE')
+        
+        # 新增實戰指標：營收 YoY 與月線乖離率
+        rev_growth = info.get('revenueGrowth')
+        rev_growth_pct = round(rev_growth * 100, 2) if rev_growth is not None else None
+        bias_20 = ((latest['Close'] - latest['MA20']) / latest['MA20']) * 100
 
         is_strategy_a = tech_a_pass and (capital < 1_000_000_000) and (book_value > 5)
         is_strategy_b = tech_b_pass and (capital < 5_000_000_000)
@@ -110,20 +113,24 @@ def check_stock(ticker, name):
                 'Semiconductors': '半導體', 'Electronic Components': '電子零組件', 
                 'Computer Hardware': '電腦及週邊', 'Communication Equipment': '通信網路',
                 'Electronic Gaming & Multimedia': '光電業', 'Consumer Electronics': '消費電子',
-                'Auto Parts': '汽車零組件', 'Biotechnology': '生技醫療'
+                'Auto Parts': '汽車零組件', 'Biotechnology': '生技醫療',
+                'Metal Fabrication': '金屬製造', 'Specialty Industrial Machinery': '特殊工業機械',
+                'Tools & Accessories': '工具與配件', 'Electronics & Computer Distribution': '電子電腦通路',
+                'Specialty Retail': '專賣零售', 'Software - Application': '軟體應用',
+                'Internet Content & Information': '網路資訊'
             }
             industry = ind_map.get(industry_en, industry_en)
 
             vol_ratio = latest['Volume'] / latest['VMA5'] if latest['VMA5'] > 0 else 0
-            if vol_ratio >= 3:
-                heat = "極高"
-            elif vol_ratio >= 1.5:
-                heat = "高"
-            else:
-                heat = "一般"
+            if vol_ratio >= 3: heat = "極高"
+            elif vol_ratio >= 1.5: heat = "高"
+            else: heat = "一般"
+
+            exchange = "TWSE" if ticker.endswith(".TW") else "TPEX"
 
             return {
                 'stock_data': {
+                    '交易所': exchange,
                     '股票代號': ticker.split('.')[0],
                     '股票名稱': name,
                     '產業面': industry,
@@ -131,9 +138,9 @@ def check_stock(ticker, name):
                     '現價': round(float(latest['Close']), 2),
                     '單日漲跌幅(%)': round(float(daily_return), 2),
                     '成交量(張)': int(volume_lots),
-                    '資本額(億)': round(capital / 100_000_000, 2),
-                    '每股盈餘(EPS)': round(float(eps), 2) if eps else None,
-                    '本益比': round(float(pe), 2) if pe else None
+                    '乖離率(%)': round(float(bias_20), 2),
+                    '營收YoY(%)': rev_growth_pct,
+                    '進榜天數': 1
                 },
                 'is_a': is_strategy_a,
                 'is_b': is_strategy_b
@@ -142,9 +149,36 @@ def check_stock(ticker, name):
         pass
     return None
 
+def get_streak(code, list_name, prev_data):
+    prev_list = prev_data.get(list_name, [])
+    for stock in prev_list:
+        if stock.get('股票代號') == code:
+            return stock.get('進榜天數', 1) + 1
+    return 1
+
 def main():
+    # 1. 載入前次歷史資料
+    previous_data = {"update_date": "無", "original_strategy": [], "ai_strategy": [], "intersection": []}
+    if os.path.exists('daily_hot_stocks.json'):
+        try:
+            with open('daily_hot_stocks.json', 'r', encoding='utf-8') as f:
+                old_json = json.load(f)
+                if "latest_data" in old_json:
+                    previous_data = old_json["latest_data"]
+                else:
+                    # 舊版格式過渡處理
+                    update_date = old_json.get("update_time", "").split(" ")[0] if "update_time" in old_json else "無"
+                    previous_data = {
+                        "update_date": update_date,
+                        "original_strategy": old_json.get("original_strategy", []),
+                        "ai_strategy": old_json.get("ai_strategy", []),
+                        "intersection": old_json.get("intersection", [])
+                    }
+        except Exception as e:
+            print(f"讀取舊檔失敗: {e}")
+
+    # 2. 獲取代號並掃描
     tickers_dict = get_all_tw_tickers()
-    
     if not tickers_dict: 
         print("【警告】無法獲取全市場代號，啟用防崩潰備用清單 (共 3 檔)。")
         tickers_dict = {'2330.TW': '台積電', '2317.TW': '鴻海', '2454.TW': '聯發科'}
@@ -161,22 +195,32 @@ def main():
             res = future.result()
             if res:
                 s_data = res['stock_data']
-                # 修正點：移除 elif，改為獨立判斷，確保股票在各區塊都會正常出現
-                if res['is_a']:
-                    results_original.append(s_data)
-                if res['is_b']:
-                    results_ai.append(s_data)
-                if res['is_a'] and res['is_b']:
-                    results_intersection.append(s_data)
+                if res['is_a']: results_original.append(s_data)
+                if res['is_b']: results_ai.append(s_data)
+                if res['is_a'] and res['is_b']: results_intersection.append(s_data)
 
+    # 3. 計算連續進榜天數
+    for s in results_original: s['進榜天數'] = get_streak(s['股票代號'], 'original_strategy', previous_data)
+    for s in results_ai: s['進榜天數'] = get_streak(s['股票代號'], 'ai_strategy', previous_data)
+    for s in results_intersection: s['進榜天數'] = get_streak(s['股票代號'], 'intersection', previous_data)
+
+    # 4. 輸出雙層結構 JSON
     tz_tw = timezone(timedelta(hours=8))
-    update_time_str = datetime.now(tz_tw).strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(tz_tw)
+    update_time_str = now.strftime("%Y-%m-%d %H:%M:%S")
+    update_date_str = now.strftime("%Y-%m-%d")
+
+    latest_data = {
+        "update_date": update_date_str,
+        "original_strategy": results_original,
+        "ai_strategy": results_ai,
+        "intersection": results_intersection
+    }
 
     output_data = {
         "update_time": update_time_str,
-        "intersection": results_intersection,
-        "original_strategy": results_original,
-        "ai_strategy": results_ai
+        "latest_data": latest_data,
+        "previous_data": previous_data
     }
 
     with open('daily_hot_stocks.json', 'w', encoding='utf-8') as f:
