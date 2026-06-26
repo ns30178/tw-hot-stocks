@@ -13,6 +13,7 @@ from urllib3.util.retry import Retry
 
 warnings.filterwarnings("ignore")
 
+# 建立全域共用的連線 Session
 global_session = requests.Session()
 retry = Retry(connect=3, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504])
 adapter = HTTPAdapter(max_retries=retry)
@@ -32,7 +33,7 @@ def get_all_tw_tickers():
             df = df.iloc[1:]
             for _, row in df.iterrows():
                 raw_data = str(row['有價證券代號及名稱'])
-                parts = raw_data.split(' ')
+                parts = raw_data.split('　')
                 if len(parts) >= 2:
                     code = parts[0].strip()
                     name = parts[1].strip()
@@ -191,6 +192,7 @@ def main():
     results_original = []
     results_ai = []
 
+    # 注意：這裡已經修正為只傳入 t, n 兩個參數
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
         futures = {executor.submit(check_stock, t, n): t for t, n in tickers_dict.items()}
         for future in concurrent.futures.as_completed(futures):
