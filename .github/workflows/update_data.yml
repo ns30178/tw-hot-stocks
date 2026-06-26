@@ -2,11 +2,10 @@ name: Update Hot Stocks Data
 
 on:
   schedule:
-    # 改為 UTC 07:45 (台灣時間 15:45)，提早排隊並避開 16:00 前後的高峰
+    # 台灣時間 15:45
     - cron: '45 7 * * 1-5'
   workflow_dispatch:
   push:
-    # 加入 push 監聽：當這個 yml 檔案被修改時，強制喚醒並重新註冊排程器
     branches:
       - main
     paths:
