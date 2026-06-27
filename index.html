@@ -36,18 +36,17 @@
     </div>
 
     <script>
-        // RWD 隱藏設定：產業、量、乖離率、營收YoY 在手機版隱藏
         const COLS = [
             { name: '代號', class: '' },
             { name: '名稱', class: '' },
             { name: '天數', class: '' },
-            { name: '產業', class: 'hidden md:table-cell' },
-            { name: '熱度', class: 'hidden md:table-cell' },
             { name: '現價', class: '' },
             { name: '漲幅%', class: '' },
-            { name: '量(張)', class: 'hidden md:table-cell' },
             { name: '乖離率%', class: 'hidden md:table-cell' },
-            { name: '營收YoY', class: 'hidden md:table-cell' }
+            { name: '營收YoY', class: 'hidden md:table-cell' },
+            { name: '法人買賣超', class: 'hidden md:table-cell' },
+            { name: '籌碼細節', class: '' },
+            { name: '消息面', class: '' }
         ];
 
         function createTableHTML(title, colorClass, data) {
@@ -58,24 +57,42 @@
                 tbody = data.map(s => {
                     const isLimitUp = s['單日漲跌幅(%)'] >= 9.9;
                     const limitUpClass = isLimitUp ? 'bg-red-600 text-white font-bold' : '';
-                    const heatClass = s['熱門程度'] === '極高' ? 'text-red-600 font-bold' : 'text-gray-600';
                     const upDownClass = isLimitUp ? 'text-white' : (s['單日漲跌幅(%)'] > 0 ? 'text-red-500' : 'text-green-500');
                     const symbolClick = `onclick="openModal('${s['交易所']}', '${s['股票代號']}')"`;
                     
+                    const fiVal = s['外資買賣(張)'] || 0;
+                    const itVal = s['投信買賣(張)'] || 0;
+                    const fiClass = fiVal > 0 ? 'text-red-500' : (fiVal < 0 ? 'text-green-500' : 'text-gray-600');
+                    const itClass = itVal > 0 ? 'text-red-500' : (itVal < 0 ? 'text-green-500' : 'text-gray-600');
+                    
+                    const brokerLink = `https://www.wantgoo.com/stock/${s['股票代號']}/major-investors/branch-buysell`;
+                    
+                    let sentimentText = s['情緒分析'] || '-';
+                    let sentimentClass = 'text-gray-500';
+                    if(sentimentText.includes('利多')) sentimentClass = 'text-red-600 font-bold bg-red-100 px-2 py-1 rounded';
+                    if(sentimentText.includes('利空')) sentimentClass = 'text-green-600 font-bold bg-green-100 px-2 py-1 rounded';
+
                     return `
                     <tr class="border-b hover:bg-gray-50 transition-colors">
                         <td class="p-2 cursor-pointer hover:underline ${limitUpClass}" ${symbolClick}>${s['股票代號'] || '-'}</td>
                         <td class="p-2 cursor-pointer hover:underline font-bold ${limitUpClass}" ${symbolClick}>${s['股票名稱'] || '-'}</td>
                         <td class="p-2 text-center font-bold text-blue-600">${s['進榜天數'] || 1}</td>
-                        <td class="p-2 hidden md:table-cell">${s['產業面'] || '-'}</td>
-                        <td class="p-2 hidden md:table-cell ${heatClass}">${s['熱門程度'] || '-'}</td>
                         <td class="p-2 font-bold">${s['現價'] || '-'}</td>
                         <td class="p-2 font-bold ${upDownClass}">
                             ${s['單日漲跌幅(%)'] ? (s['單日漲跌幅(%)'] > 0 ? '+' : '') + s['單日漲跌幅(%)'] : '-'}
                         </td>
-                        <td class="p-2 hidden md:table-cell">${s['成交量(張)'] || '-'}</td>
                         <td class="p-2 hidden md:table-cell">${s['乖離率(%)'] !== null ? s['乖離率(%)'] : '-'}</td>
                         <td class="p-2 hidden md:table-cell">${s['營收YoY(%)'] !== null ? s['營收YoY(%)'] + '%' : '-'}</td>
+                        <td class="p-2 hidden md:table-cell text-sm">
+                            外資: <span class="${fiClass}">${fiVal}</span><br>
+                            投信: <span class="${itClass}">${itVal}</span>
+                        </td>
+                        <td class="p-2">
+                            <a href="${brokerLink}" target="_blank" class="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 font-bold">查看主力/分點</a>
+                        </td>
+                        <td class="p-2">
+                            <a href="${s['新聞連結']}" target="_blank" class="${sentimentClass} hover:underline">${sentimentText}</a>
+                        </td>
                     </tr>
                 `}).join('');
             }
@@ -99,7 +116,7 @@
 
         function openModal(exchange, code) {
             document.getElementById('tv-modal').classList.remove('hidden');
-            document.getElementById('tv_chart_container').innerHTML = ''; // 清空舊圖表
+            document.getElementById('tv_chart_container').innerHTML = '';
             new TradingView.widget({
                 "autosize": true,
                 "symbol": `${exchange}:${code}`,
@@ -117,14 +134,13 @@
                     "MACD@tv-basicstudies"
                 ],
                 "container_id": "tv_chart_container",
-                // 核心修正：翻轉色調，完美符合台股習慣（紅漲綠跌）
                 "overrides": {
-                    "mainSeriesProperties.candleStyle.upColor": "#f23645",        // 上漲改為亮紅
-                    "mainSeriesProperties.candleStyle.borderUpColor": "#f23645",  // 上漲外框改紅
-                    "mainSeriesProperties.candleStyle.wickUpColor": "#f23645",    // 上漲影線改紅
-                    "mainSeriesProperties.candleStyle.downColor": "#089981",      // 下跌改為亮綠
-                    "mainSeriesProperties.candleStyle.borderDownColor": "#089981",// 下跌外框改綠
-                    "mainSeriesProperties.candleStyle.wickDownColor": "#089981"   // 下跌影線改綠
+                    "mainSeriesProperties.candleStyle.upColor": "#f23645",
+                    "mainSeriesProperties.candleStyle.borderUpColor": "#f23645",
+                    "mainSeriesProperties.candleStyle.wickUpColor": "#f23645",
+                    "mainSeriesProperties.candleStyle.downColor": "#089981",
+                    "mainSeriesProperties.candleStyle.borderDownColor": "#089981",
+                    "mainSeriesProperties.candleStyle.wickDownColor": "#089981"
                 }
             });
         }
@@ -139,7 +155,6 @@
             .then(data => {
                 document.getElementById('update-time').innerText = "資料更新時間：" + (data.update_time || '未知');
                 
-                // 渲染今日最新資料
                 if(data.latest_data) {
                     document.getElementById('latest-date').innerText = "資料時間：" + (data.latest_data.update_date || '未知');
                     document.getElementById('latest-original').innerHTML = createTableHTML('飆股策略', 'border-blue-500', data.latest_data.original_strategy);
@@ -147,7 +162,6 @@
                     document.getElementById('latest-intersection').innerHTML = createTableHTML('核心交集標的', 'border-purple-500', data.latest_data.intersection);
                 }
 
-                // 渲染前次資料
                 if(data.previous_data) {
                     document.getElementById('previous-date').innerText = "資料時間：" + (data.previous_data.update_date || '無');
                     document.getElementById('previous-original').innerHTML = createTableHTML('飆股策略', 'border-blue-300', data.previous_data.original_strategy);
