@@ -6,6 +6,12 @@
     <title>台股雙策略觀測站</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+    <style>
+        th { cursor: pointer; user-select: none; }
+        th:hover { background-color: #e5e7eb; transition: 0.2s; }
+        .asc::after { content: ' ↑'; color: #4b5563; }
+        .desc::after { content: ' ↓'; color: #4b5563; }
+    </style>
 </head>
 <body class="bg-gray-100 p-4 md:p-8 relative">
 
@@ -14,6 +20,7 @@
         <p class="text-gray-600 mt-2 font-bold" id="update-time">資料更新時間：讀取中...</p>
     </div>
 
+    <!-- 1. 最新資料區塊 -->
     <div id="latest-section" class="max-w-6xl mx-auto mb-10">
         <h2 class="text-2xl font-bold text-gray-800 mb-4 border-l-4 border-gray-800 pl-3" id="latest-date">資料時間：今日</h2>
         <div id="latest-original"></div>
@@ -21,13 +28,30 @@
         <div id="latest-intersection"></div>
     </div>
 
-    <div id="previous-section" class="max-w-6xl mx-auto mb-10 opacity-80">
-        <h2 class="text-2xl font-bold text-gray-600 mb-4 border-l-4 border-gray-400 pl-3" id="previous-date">資料時間：前次</h2>
-        <div id="previous-original"></div>
-        <div id="previous-ai"></div>
-        <div id="previous-intersection"></div>
+    <!-- 2. 歷史摺疊資料區塊 -->
+    <details class="max-w-6xl mx-auto mb-10 group">
+        <summary class="text-2xl font-bold text-gray-600 mb-4 border-l-4 border-gray-400 pl-3 cursor-pointer outline-none">
+            展開前次歷史資料 (摺疊收納)
+        </summary>
+        <div class="opacity-80 mt-4">
+            <h2 class="text-xl font-bold text-gray-600 mb-4" id="previous-date">資料時間：前次</h2>
+            <div id="previous-original"></div>
+            <div id="previous-ai"></div>
+            <div id="previous-intersection"></div>
+        </div>
+    </details>
+
+    <!-- 3. 績效統計面板 (已移至最下方) -->
+    <div id="performance-board" class="max-w-6xl mx-auto mb-10 hidden">
+        <div class="bg-gray-800 text-white p-4 rounded-lg shadow-lg">
+            <h2 class="text-xl font-bold mb-3 border-l-4 border-yellow-400 pl-3">策略績效回測統計 (歷史進榜結算)</h2>
+            <div id="stats-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- JavaScript 動態注入 -->
+            </div>
+        </div>
     </div>
 
+    <!-- 彈出式線圖視窗 -->
     <div id="tv-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
         <div class="bg-gray-900 w-full max-w-5xl h-[80vh] rounded-lg shadow-2xl relative flex flex-col">
             <button onclick="closeModal()" class="absolute -top-4 -right-4 bg-red-600 text-white rounded-full w-10 h-10 text-xl font-bold border-2 border-white hover:bg-red-700 z-50">&times;</button>
@@ -37,22 +61,55 @@
 
     <script>
         const COLS = [
-            { name: '代號', class: '' },
-            { name: '名稱', class: '' },
-            { name: '天數', class: '' },
-            { name: '現價', class: '' },
-            { name: '漲幅%', class: '' },
-            { name: '乖離率%', class: 'hidden md:table-cell' },
-            { name: '營收YoY', class: 'hidden md:table-cell' },
-            { name: '法人買賣超', class: 'hidden md:table-cell' },
-            { name: '籌碼細節', class: '' },
-            { name: '消息面', class: '' }
+            { name: '代號', class: '', key: '股票代號' },
+            { name: '名稱', class: '', key: '股票名稱' },
+            { name: '天數', class: '', key: '進榜天數' },
+            { name: '現價', class: '', key: '現價' },
+            { name: '漲幅%', class: '', key: '單日漲跌幅(%)' },
+            { name: '乖離率%', class: 'hidden md:table-cell', key: '乖離率(%)' },
+            { name: '營收YoY', class: 'hidden md:table-cell', key: '營收YoY(%)' },
+            { name: '法人買賣超 (點擊看主力)', class: 'hidden md:table-cell', key: '外資買賣(張)' },
+            { name: '消息面', class: '', key: '情緒分析' }
         ];
 
-        function createTableHTML(title, colorClass, data) {
+        let sortState = {};
+
+        function sortTable(tableId, colIndex, key) {
+            const table = document.getElementById(tableId).querySelector('table');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            if (rows.length === 0 || rows[0].innerText.includes('無符合條件')) return;
+
+            const ths = table.querySelectorAll('th');
+            ths.forEach(th => th.classList.remove('asc', 'desc'));
+
+            sortState[tableId] = sortState[tableId] || {};
+            sortState[tableId][key] = !sortState[tableId][key];
+            const isAsc = sortState[tableId][key];
+            ths[colIndex].classList.add(isAsc ? 'asc' : 'desc');
+
+            rows.sort((a, b) => {
+                let valA = a.children[colIndex].innerText.replace(/[%張\+]/g, '').split('\n')[0].trim();
+                let valB = b.children[colIndex].innerText.replace(/[%張\+]/g, '').split('\n')[0].trim();
+                
+                let numA = parseFloat(valA);
+                let numB = parseFloat(valB);
+
+                if (!isNaN(numA) && !isNaN(numB)) {
+                    return isAsc ? numA - numB : numB - numA;
+                }
+                return isAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            });
+
+            rows.forEach(row => tbody.appendChild(row));
+        }
+
+        function createTableHTML(title, colorClass, data, idPrefix) {
             let tbody = '';
+            const tableId = `tbl-${idPrefix}`;
+            
             if (!data || data.length === 0) {
-                tbody = '<tr><td colspan="10" class="p-4 text-gray-400 text-center italic">無符合條件標的</td></tr>';
+                tbody = '<tr><td colspan="9" class="p-4 text-gray-400 text-center italic">無符合條件標的</td></tr>';
             } else {
                 tbody = data.map(s => {
                     const isLimitUp = s['單日漲跌幅(%)'] >= 9.9;
@@ -64,10 +121,9 @@
                     const itVal = s['投信買賣(張)'] || 0;
                     const fiClass = fiVal > 0 ? 'text-red-500' : (fiVal < 0 ? 'text-green-500' : 'text-gray-600');
                     const itClass = itVal > 0 ? 'text-red-500' : (itVal < 0 ? 'text-green-500' : 'text-gray-600');
-                    
                     const brokerLink = `https://www.wantgoo.com/stock/${s['股票代號']}/major-investors/branch-buysell`;
                     
-                    let sentimentText = s['情緒分析'] || '-';
+                    let sentimentText = s['情緒分析'] || '—';
                     let sentimentClass = 'text-gray-500';
                     if(sentimentText.includes('利多')) sentimentClass = 'text-red-600 font-bold bg-red-100 px-2 py-1 rounded';
                     if(sentimentText.includes('利空')) sentimentClass = 'text-green-600 font-bold bg-green-100 px-2 py-1 rounded';
@@ -78,40 +134,65 @@
                         <td class="p-2 cursor-pointer hover:underline font-bold ${limitUpClass}" ${symbolClick}>${s['股票名稱'] || '-'}</td>
                         <td class="p-2 text-center font-bold text-blue-600">${s['進榜天數'] || 1}</td>
                         <td class="p-2 font-bold">${s['現價'] || '-'}</td>
-                        <td class="p-2 font-bold ${upDownClass}">
-                            ${s['單日漲跌幅(%)'] ? (s['單日漲跌幅(%)'] > 0 ? '+' : '') + s['單日漲跌幅(%)'] : '-'}
-                        </td>
+                        <td class="p-2 font-bold ${upDownClass}">${s['單日漲跌幅(%)'] ? (s['單日漲跌幅(%)'] > 0 ? '+' : '') + s['單日漲跌幅(%)'] : '-'}</td>
                         <td class="p-2 hidden md:table-cell">${s['乖離率(%)'] !== null ? s['乖離率(%)'] : '-'}</td>
-                        <td class="p-2 hidden md:table-cell">${s['營收YoY(%)'] !== null ? s['營收YoY(%)'] + '%' : '-'}</td>
+                        <td class="p-2 hidden md:table-cell">${s['營收YoY(%)'] !== null ? s['營收YoY(%)'] : '-'}</td>
                         <td class="p-2 hidden md:table-cell text-sm">
-                            外資: <span class="${fiClass}">${fiVal}</span><br>
-                            投信: <span class="${itClass}">${itVal}</span>
+                            <a href="${brokerLink}" target="_blank" class="hover:underline hover:text-blue-600 block">
+                                外資: <span class="${fiClass}">${fiVal}</span><br>
+                                投信: <span class="${itClass}">${itVal}</span>
+                            </a>
                         </td>
                         <td class="p-2">
-                            <a href="${brokerLink}" target="_blank" class="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 font-bold">查看主力/分點</a>
-                        </td>
-                        <td class="p-2">
-                            <a href="${s['新聞連結']}" target="_blank" class="${sentimentClass} hover:underline">${sentimentText}</a>
+                            ${sentimentText === '—' 
+                                ? '<span class="text-gray-400">—</span>' 
+                                : `<a href="${s['新聞連結']}" target="_blank" class="${sentimentClass} hover:underline">${sentimentText}</a>`}
                         </td>
                     </tr>
                 `}).join('');
             }
 
+            const thead = COLS.map((c, i) => 
+                `<th class="p-2 ${c.class}" onclick="sortTable('${tableId}', ${i}, '${c.key}')" title="點擊排序">${c.name}</th>`
+            ).join('');
+
             return `
-                <div class="bg-white p-4 md:p-6 rounded shadow-md mb-6 border-t-4 ${colorClass}">
+                <div id="${tableId}" class="bg-white p-4 md:p-6 rounded shadow-md mb-6 border-t-4 ${colorClass}">
                     <h3 class="text-xl font-bold mb-4">${title}</h3>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-sm whitespace-nowrap">
-                            <thead>
-                                <tr class="border-b bg-gray-50 text-gray-600">
-                                    ${COLS.map(c => `<th class="p-2 ${c.class}">${c.name}</th>`).join('')}
-                                </tr>
-                            </thead>
+                            <thead><tr class="border-b bg-gray-50 text-gray-600">${thead}</tr></thead>
                             <tbody>${tbody}</tbody>
                         </table>
                     </div>
                 </div>
             `;
+        }
+
+        function renderPerformance(stats) {
+            if (!stats || Object.keys(stats).length === 0) return;
+            const container = document.getElementById('stats-container');
+            let html = '';
+            
+            ['飆股策略', 'AI選股策略'].forEach(strategy => {
+                if(stats[strategy]) {
+                    html += `<div class="bg-gray-700 p-4 rounded"><h3 class="text-lg font-bold text-yellow-300 mb-2">${strategy}</h3><table class="w-full text-sm"><thead><tr class="text-gray-400 border-b border-gray-600"><th class="text-left py-1">持有區間</th><th class="text-right py-1">勝率</th><th class="text-right py-1">平均報酬</th><th class="text-right py-1">最佳標的</th></tr></thead><tbody>`;
+                    
+                    ['5日', '10日', '20日'].forEach(period => {
+                        const d = stats[strategy][period];
+                        if (d && d.count > 0) {
+                            const winColor = d.win_rate >= 50 ? 'text-red-400' : 'text-green-400';
+                            const retColor = d.avg_return > 0 ? 'text-red-400' : 'text-green-400';
+                            html += `<tr class="border-b border-gray-600"><td class="py-2">${period}</td><td class="text-right font-bold ${winColor}">${d.win_rate}%</td><td class="text-right font-bold ${retColor}">${d.avg_return > 0 ? '+' : ''}${d.avg_return}%</td><td class="text-right text-gray-300">${d.best_stock}</td></tr>`;
+                        } else {
+                            html += `<tr class="border-b border-gray-600"><td class="py-2 text-gray-500">${period}</td><td class="text-right text-gray-500">—</td><td class="text-right text-gray-500">—</td><td class="text-right text-gray-500">—</td></tr>`;
+                        }
+                    });
+                    html += `</tbody></table></div>`;
+                }
+            });
+            container.innerHTML = html;
+            document.getElementById('performance-board').classList.remove('hidden');
         }
 
         function openModal(exchange, code) {
@@ -128,11 +209,7 @@
                 "enable_publishing": false,
                 "hide_top_toolbar": false,
                 "allow_symbol_change": false,
-                "studies": [
-                    "Volume@tv-basicstudies",
-                    "Stochastic@tv-basicstudies",
-                    "MACD@tv-basicstudies"
-                ],
+                "studies": ["Volume@tv-basicstudies", "Stochastic@tv-basicstudies", "MACD@tv-basicstudies"],
                 "container_id": "tv_chart_container",
                 "overrides": {
                     "mainSeriesProperties.candleStyle.upColor": "#f23645",
@@ -155,18 +232,22 @@
             .then(data => {
                 document.getElementById('update-time').innerText = "資料更新時間：" + (data.update_time || '未知');
                 
+                if (data.performance_stats) {
+                    renderPerformance(data.performance_stats);
+                }
+
                 if(data.latest_data) {
                     document.getElementById('latest-date').innerText = "資料時間：" + (data.latest_data.update_date || '未知');
-                    document.getElementById('latest-original').innerHTML = createTableHTML('飆股策略', 'border-blue-500', data.latest_data.original_strategy);
-                    document.getElementById('latest-ai').innerHTML = createTableHTML('AI 選股策略', 'border-emerald-500', data.latest_data.ai_strategy);
-                    document.getElementById('latest-intersection').innerHTML = createTableHTML('核心交集標的', 'border-purple-500', data.latest_data.intersection);
+                    document.getElementById('latest-original').innerHTML = createTableHTML('飆股策略', 'border-blue-500', data.latest_data.original_strategy, 'latest-a');
+                    document.getElementById('latest-ai').innerHTML = createTableHTML('AI 選股策略', 'border-emerald-500', data.latest_data.ai_strategy, 'latest-b');
+                    document.getElementById('latest-intersection').innerHTML = createTableHTML('核心交集標的', 'border-purple-500', data.latest_data.intersection, 'latest-c');
                 }
 
                 if(data.previous_data) {
                     document.getElementById('previous-date').innerText = "資料時間：" + (data.previous_data.update_date || '無');
-                    document.getElementById('previous-original').innerHTML = createTableHTML('飆股策略', 'border-blue-300', data.previous_data.original_strategy);
-                    document.getElementById('previous-ai').innerHTML = createTableHTML('AI 選股策略', 'border-emerald-300', data.previous_data.ai_strategy);
-                    document.getElementById('previous-intersection').innerHTML = createTableHTML('核心交集標的', 'border-purple-300', data.previous_data.intersection);
+                    document.getElementById('previous-original').innerHTML = createTableHTML('飆股策略', 'border-blue-300', data.previous_data.original_strategy, 'prev-a');
+                    document.getElementById('previous-ai').innerHTML = createTableHTML('AI 選股策略', 'border-emerald-300', data.previous_data.ai_strategy, 'prev-b');
+                    document.getElementById('previous-intersection').innerHTML = createTableHTML('核心交集標的', 'border-purple-300', data.previous_data.intersection, 'prev-c');
                 }
             })
             .catch(err => { console.error('Fetch error:', err); });
