@@ -7,6 +7,7 @@ import time
 import random
 import json
 import os
+import traceback
 from datetime import datetime, timezone, timedelta
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -14,12 +15,29 @@ from bs4 import BeautifulSoup
 
 warnings.filterwarnings("ignore")
 
+# ==========================================
+# 系統設定區 (Telegram 推播)
+# ==========================================
+TG_BOT_TOKEN = 8954208808:AAFj4n1yqTLYfLcHgGrET4RD1d5EF24Vqbw
+TG_CHAT_ID = 8665090039
+# ==========================================
+
 global_session = requests.Session()
 retry = Retry(connect=3, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504])
 adapter = HTTPAdapter(max_retries=retry)
 global_session.mount('http://', adapter)
 global_session.mount('https://', adapter)
 global_session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+
+def send_telegram_notify(msg):
+    if not TG_BOT_TOKEN or TG_BOT_TOKEN == "請填入您的Bot Token":
+        return
+    url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
+    data = {"chat_id": TG_CHAT_ID, "text": msg}
+    try:
+        requests.post(url, data=data, timeout=10)
+    except Exception:
+        pass
 
 def get_all_tw_tickers():
     tickers = {}
@@ -33,7 +51,7 @@ def get_all_tw_tickers():
             df = df.iloc[1:]
             for _, row in df.iterrows():
                 raw_data = str(row['有價證券代號及名稱'])
-                parts = raw_data.split('　')
+                parts = raw_data.split(' ')
                 if len(parts) >= 2:
                     code = parts[0].strip()
                     name = parts[1].strip()
@@ -45,6 +63,7 @@ def get_all_tw_tickers():
 
 def get_institutional_data():
     inst_data = {}
+    # TWSE (上市)
     try:
         res = requests.get("https://openapi.twse.com.tw/v1/fund/T86_ALL", timeout=10)
         if res.status_code == 200:
@@ -61,23 +80,37 @@ def get_institutional_data():
                     pass
     except Exception:
         pass
+    
+    # TPEX (上櫃)
+    try:
+        res_tpex = requests.get("https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=json", timeout=10)
+        if res_tpex.status_code == 200:
+            data = res_tpex.json().get('aaData', [])
+            for row in data:
+                if len(row) >= 12:
+                    code = row[0]
+                    try:
+                        fi = int(str(row[8]).replace(',', '').strip()) // 1000
+                        it = int(str(row[11]).replace(',', '').strip()) // 1000
+                        inst_data[code] = {"FI": fi, "IT": it}
+                    except ValueError:
+                        pass
+    except Exception:
+        pass
+        
     return inst_data
 
 def analyze_news_sentiment(code):
     pos_words = ['營收', '創高', '雙增', '大單', '受惠', '看好', '成長', '突破', '轉機', '拉貨', '優於預期', '爆發', '買超', '漲停', '利多', '上修']
     neg_words = ['衰退', '減', '降', '不如預期', '保守', '下修', '看壞', '出脫', '跌停', '虧損', '法說會失靈', '利空', '賣超', '走弱']
-    
     url = f"https://tw.stock.yahoo.com/quote/{code}/news"
-    sentiment_label = "無消息"
     
     try:
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
             titles = soup.find_all('h3')
-            
-            pos_score = 0
-            neg_score = 0
+            pos_score, neg_score = 0, 0
             
             for t in titles[:10]:
                 title_text = t.text
@@ -87,21 +120,20 @@ def analyze_news_sentiment(code):
                     if word in title_text: neg_score += 1
             
             if pos_score == 0 and neg_score == 0:
-                sentiment_label = "中性"
+                return "—", url
             elif pos_score > neg_score:
-                sentiment_label = f"利多 ({pos_score})"
+                return f"利多 ({pos_score})", url
             else:
-                sentiment_label = f"利空 ({neg_score})"
+                return f"利空 ({neg_score})", url
     except Exception:
-        sentiment_label = "讀取失敗"
-        
-    return sentiment_label, url
+        return "—", url
+    return "—", url
 
 def check_stock(ticker, name, inst_data):
     try:
         time.sleep(random.uniform(0.1, 0.4)) 
-        
-        data = yf.download(ticker, period="1y", progress=False, session=global_session)
+        # auto_adjust=True 讓過去價格自動還原權息
+        data = yf.download(ticker, period="1y", auto_adjust=True, progress=False, session=global_session)
         if len(data) < 200: return None
         if isinstance(data.columns, pd.MultiIndex): data.columns = data.columns.droplevel(1)
 
@@ -166,21 +198,14 @@ def check_stock(ticker, name, inst_data):
         is_strategy_b = tech_b_pass and (capital < 5_000_000_000)
 
         if is_strategy_a or is_strategy_b:
-            industry = info.get('industry', '未知')
-            vol_ratio = latest['Volume'] / latest['VMA5'] if latest['VMA5'] > 0 else 0
-            heat = "極高" if vol_ratio >= 3 else "高" if vol_ratio >= 1.5 else "一般"
             exchange = "TWSE" if ticker.endswith(".TW") else "TPEX"
-
             return {
                 'stock_data': {
                     '交易所': exchange,
                     '股票代號': code_only,
                     '股票名稱': name,
-                    '產業面': industry,
-                    '熱門程度': heat,
                     '現價': round(float(latest['Close']), 2),
                     '單日漲跌幅(%)': round(float(daily_return), 2),
-                    '成交量(張)': int(volume_lots),
                     '乖離率(%)': round(float(bias_20), 2),
                     '營收YoY(%)': rev_growth_pct,
                     '外資買賣(張)': inst["FI"],
@@ -194,73 +219,168 @@ def check_stock(ticker, name, inst_data):
         pass
     return None
 
-def get_streak(code, list_name, prev_data):
-    for stock in prev_data.get(list_name, []):
-        if stock.get('股票代號') == code:
-            return stock.get('進榜天數', 1) + 1
-    return 1
+def calculate_performance(csv_file):
+    if not os.path.exists(csv_file) or os.path.getsize(csv_file) == 0:
+        return {}
+    try:
+        df = pd.read_csv(csv_file)
+        if df.empty or '股票代號' not in df.columns: return {}
+        
+        df['日期'] = pd.to_datetime(df['日期'])
+        today = pd.to_datetime(datetime.now(timezone(timedelta(hours=8))).date())
+        df['Days'] = (today - df['日期']).dt.days
+        
+        df_target = df[df['Days'] >= 5].copy()
+        if df_target.empty: return {}
+        
+        ticker_map = {}
+        for _, row in df_target.drop_duplicates('股票代號').iterrows():
+            suffix = ".TW" if row.get('交易所') == "TWSE" else ".TWO"
+            ticker_map[str(row['股票代號'])] = f"{row['股票代號']}{suffix}"
+            
+        tickers_to_dl = list(ticker_map.values())
+        curr_data = yf.download(tickers_to_dl, period="5d", auto_adjust=True, progress=False)
+        
+        latest_prices = {}
+        if len(tickers_to_dl) == 1:
+            latest_prices[tickers_to_dl[0]] = float(curr_data['Close'].iloc[-1])
+        else:
+            for t in tickers_to_dl:
+                try:
+                    latest_prices[t] = float(curr_data['Close'][t].dropna().iloc[-1])
+                except:
+                    pass
+                    
+        def get_ret(row):
+            t_full = ticker_map.get(str(row['股票代號']))
+            lp = latest_prices.get(t_full)
+            if lp and row.get('現價', 0) > 0:
+                return (lp - row['現價']) / row['現價'] * 100
+            return None
+            
+        df_target['Return'] = df_target.apply(get_ret, axis=1)
+        df_target = df_target.dropna(subset=['Return'])
+        
+        def get_period(d):
+            if 5 <= d <= 9: return "5日"
+            elif 10 <= d <= 19: return "10日"
+            elif d >= 20: return "20日"
+            return None
+            
+        df_target['Period'] = df_target['Days'].apply(get_period)
+        df_target = df_target.dropna(subset=['Period'])
+        
+        stats = {}
+        for strategy in ['飆股策略', 'AI選股策略']:
+            stats[strategy] = {}
+            strat_df = df_target[df_target['策略'] == strategy]
+            for period in ["5日", "10日", "20日"]:
+                p_df = strat_df[strat_df['Period'] == period]
+                if not p_df.empty:
+                    win_rate = (p_df['Return'] > 0).mean() * 100
+                    avg_ret = p_df['Return'].mean()
+                    best_row = p_df.loc[p_df['Return'].idxmax()]
+                    best_str = f"{best_row['股票代號']}(+{best_row['Return']:.1f}%)"
+                    stats[strategy][period] = {
+                        "count": len(p_df),
+                        "win_rate": round(win_rate, 1),
+                        "avg_return": round(avg_ret, 2),
+                        "best_stock": best_str
+                    }
+                else:
+                    stats[strategy][period] = {"count": 0, "win_rate": 0, "avg_return": 0, "best_stock": "—"}
+        return stats
+    except Exception:
+        return {}
 
 def main():
-    previous_data = {"update_date": "無", "original_strategy": [], "ai_strategy": [], "intersection": []}
-    if os.path.exists('daily_hot_stocks.json') and os.path.getsize('daily_hot_stocks.json') > 0:
-        try:
-            with open('daily_hot_stocks.json', 'r', encoding='utf-8') as f:
-                old_json = json.load(f)
-                previous_data = old_json.get("latest_data", previous_data)
-        except Exception:
-            pass
+    try:
+        previous_data = {"update_date": "無", "original_strategy": [], "ai_strategy": [], "intersection": []}
+        if os.path.exists('daily_hot_stocks.json') and os.path.getsize('daily_hot_stocks.json') > 0:
+            try:
+                with open('daily_hot_stocks.json', 'r', encoding='utf-8') as f:
+                    old_json = json.load(f)
+                    previous_data = old_json.get("latest_data", previous_data)
+            except Exception:
+                pass
 
-    tickers_dict = get_all_tw_tickers()
-    if not tickers_dict: tickers_dict = {'2330.TW': '台積電', '2317.TW': '鴻海', '2454.TW': '聯發科'}
-    inst_data = get_institutional_data()
+        tickers_dict = get_all_tw_tickers()
+        if not tickers_dict: tickers_dict = {'2330.TW': '台積電'}
+        inst_data = get_institutional_data()
+            
+        results_intersection, results_original, results_ai = [], [], []
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {executor.submit(check_stock, t, n, inst_data): t for t, n in tickers_dict.items()}
+            for future in concurrent.futures.as_completed(futures):
+                res = future.result()
+                if res:
+                    s_data = res['stock_data']
+                    if res['is_a']: results_original.append(s_data)
+                    if res['is_b']: results_ai.append(s_data)
+                    if res['is_a'] and res['is_b']: results_intersection.append(s_data)
+
+        def get_streak(code, list_name):
+            for stock in previous_data.get(list_name, []):
+                if stock.get('股票代號') == code:
+                    return stock.get('進榜天數', 1) + 1
+            return 1
+
+        for lst, name in [(results_original, 'original_strategy'), (results_ai, 'ai_strategy'), (results_intersection, 'intersection')]:
+            for s in lst:
+                s['進榜天數'] = get_streak(s['股票代號'], name)
+                sentiment, news_url = analyze_news_sentiment(s['股票代號'])
+                s['情緒分析'] = sentiment
+                s['新聞連結'] = news_url
+
+        tz_tw = timezone(timedelta(hours=8))
+        now = datetime.now(tz_tw)
+        update_date_str = now.strftime("%Y-%m-%d")
         
-    results_intersection, results_original, results_ai = [], [], []
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        futures = {executor.submit(check_stock, t, n, inst_data): t for t, n in tickers_dict.items()}
-        for future in concurrent.futures.as_completed(futures):
-            res = future.result()
-            if res:
-                s_data = res['stock_data']
-                if res['is_a']: results_original.append(s_data)
-                if res['is_b']: results_ai.append(s_data)
-                if res['is_a'] and res['is_b']: results_intersection.append(s_data)
-
-    for lst, name in [(results_original, 'original_strategy'), (results_ai, 'ai_strategy'), (results_intersection, 'intersection')]:
-        for s in lst:
-            s['進榜天數'] = get_streak(s['股票代號'], name, previous_data)
-            sentiment, news_url = analyze_news_sentiment(s['股票代號'])
-            s['情緒分析'] = sentiment
-            s['新聞連結'] = news_url
-
-    tz_tw = timezone(timedelta(hours=8))
-    now = datetime.now(tz_tw)
-    
-    output_data = {
-        "update_time": now.strftime("%Y-%m-%d %H:%M:%S"),
-        "latest_data": {
-            "update_date": now.strftime("%Y-%m-%d"),
-            "original_strategy": results_original,
-            "ai_strategy": results_ai,
-            "intersection": results_intersection
-        },
-        "previous_data": previous_data
-    }
-
-    with open('daily_hot_stocks.json', 'w', encoding='utf-8') as f:
-        json.dump(output_data, f, ensure_ascii=False, indent=4)
-        
-    all_results = []
-    for s in results_original: s_copy = s.copy(); s_copy['策略'] = '飆股策略'; all_results.append(s_copy)
-    for s in results_ai: s_copy = s.copy(); s_copy['策略'] = 'AI選股策略'; all_results.append(s_copy)
-    for s in results_intersection: s_copy = s.copy(); s_copy['策略'] = '核心交集'; all_results.append(s_copy)
-
-    if all_results:
-        df_new = pd.DataFrame(all_results)
-        df_new.insert(0, '日期', now.strftime("%Y-%m-%d"))
+        # 寫入 CSV 以供計算
         csv_file = 'history_records.csv'
-        file_exists = os.path.isfile(csv_file) and os.path.getsize(csv_file) > 0
-        df_new.to_csv(csv_file, mode='a', index=False, encoding='utf-8-sig', header=not file_exists)
+        all_results = []
+        for s in results_original: s_copy = s.copy(); s_copy['策略'] = '飆股策略'; all_results.append(s_copy)
+        for s in results_ai: s_copy = s.copy(); s_copy['策略'] = 'AI選股策略'; all_results.append(s_copy)
+        for s in results_intersection: s_copy = s.copy(); s_copy['策略'] = '核心交集'; all_results.append(s_copy)
+        if all_results:
+            df_new = pd.DataFrame(all_results)
+            df_new.insert(0, '日期', update_date_str)
+            file_exists = os.path.isfile(csv_file) and os.path.getsize(csv_file) > 0
+            df_new.to_csv(csv_file, mode='a', index=False, encoding='utf-8-sig', header=not file_exists)
+
+        # 執行績效結算
+        perf_stats = calculate_performance(csv_file)
+
+        output_data = {
+            "update_time": now.strftime("%Y-%m-%d %H:%M:%S"),
+            "latest_data": {
+                "update_date": update_date_str,
+                "original_strategy": results_original,
+                "ai_strategy": results_ai,
+                "intersection": results_intersection
+            },
+            "previous_data": previous_data,
+            "performance_stats": perf_stats
+        }
+
+        with open('daily_hot_stocks.json', 'w', encoding='utf-8') as f:
+            json.dump(output_data, f, ensure_ascii=False, indent=4)
+            
+        # 發送 Telegram 推播
+        notify_msg = (
+            f"\n📊 台股雙策略觀測站 更新完成\n"
+            f"📅 日期：{update_date_str}\n\n"
+            f"🔥 核心交集：{len(results_intersection)} 檔\n"
+            f"📈 飆股策略：{len(results_original)} 檔\n"
+            f"🤖 AI 選股：{len(results_ai)} 檔\n\n"
+            f"請至 GitHub Pages 網頁查看最新清單與績效面板。"
+        )
+        send_telegram_notify(notify_msg)
+        
+    except Exception as e:
+        error_msg = f"\n⚠️ 台股觀測站執行失敗\n錯誤訊息: {str(e)}\n\n詳細 Log:\n{traceback.format_exc()[:500]}"
+        send_telegram_notify(error_msg)
 
 if __name__ == "__main__":
     main()
