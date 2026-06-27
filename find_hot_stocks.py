@@ -10,16 +10,16 @@ import os
 from datetime import datetime, timezone, timedelta
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from bs4 import BeautifulSoup
 
 warnings.filterwarnings("ignore")
 
-# 建立全域共用的連線 Session
 global_session = requests.Session()
 retry = Retry(connect=3, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504])
 adapter = HTTPAdapter(max_retries=retry)
 global_session.mount('http://', adapter)
 global_session.mount('https://', adapter)
-global_session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+global_session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
 
 def get_all_tw_tickers():
     tickers = {}
@@ -39,13 +39,67 @@ def get_all_tw_tickers():
                     name = parts[1].strip()
                     if len(code) == 4 and code.isdigit():
                         tickers[f"{code}{suffix}"] = name
-    except Exception as e:
-        print(f"代號獲取異常: {e}")
+    except Exception:
+        pass
     return tickers
 
-def check_stock(ticker, name):
+def get_institutional_data():
+    inst_data = {}
     try:
-        time.sleep(random.uniform(0.1, 0.5)) 
+        res = requests.get("https://openapi.twse.com.tw/v1/fund/T86_ALL", timeout=10)
+        if res.status_code == 200:
+            for item in res.json():
+                code = item.get("Code")
+                fi = item.get("Foreign_Investor_Diff", 0)
+                it = item.get("Investment_Trust_Diff", 0)
+                try:
+                    inst_data[code] = {
+                        "FI": int(str(fi).replace(',', '')) // 1000,
+                        "IT": int(str(it).replace(',', '')) // 1000
+                    }
+                except ValueError:
+                    pass
+    except Exception:
+        pass
+    return inst_data
+
+def analyze_news_sentiment(code):
+    pos_words = ['營收', '創高', '雙增', '大單', '受惠', '看好', '成長', '突破', '轉機', '拉貨', '優於預期', '爆發', '買超', '漲停', '利多', '上修']
+    neg_words = ['衰退', '減', '降', '不如預期', '保守', '下修', '看壞', '出脫', '跌停', '虧損', '法說會失靈', '利空', '賣超', '走弱']
+    
+    url = f"https://tw.stock.yahoo.com/quote/{code}/news"
+    sentiment_label = "無消息"
+    
+    try:
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, 'html.parser')
+            titles = soup.find_all('h3')
+            
+            pos_score = 0
+            neg_score = 0
+            
+            for t in titles[:10]:
+                title_text = t.text
+                for word in pos_words:
+                    if word in title_text: pos_score += 1
+                for word in neg_words:
+                    if word in title_text: neg_score += 1
+            
+            if pos_score == 0 and neg_score == 0:
+                sentiment_label = "中性"
+            elif pos_score > neg_score:
+                sentiment_label = f"利多 ({pos_score})"
+            else:
+                sentiment_label = f"利空 ({neg_score})"
+    except Exception:
+        sentiment_label = "讀取失敗"
+        
+    return sentiment_label, url
+
+def check_stock(ticker, name, inst_data):
+    try:
+        time.sleep(random.uniform(0.1, 0.4)) 
         
         data = yf.download(ticker, period="1y", progress=False, session=global_session)
         if len(data) < 200: return None
@@ -69,13 +123,10 @@ def check_stock(ticker, name):
         daily_return = ((latest['Close'] - prev['Close']) / prev['Close']) * 100
         volume_lots = latest['Volume'] / 1000
 
-        # === 策略 A：流動性門檻調高至 500 張 ===
         tech_a_pass = (latest['Close'] >= data['Close'].tail(200).max()) and (500 <= volume_lots <= 5000)
 
-        # === 策略 B ===
         cond_b_price = latest['Close'] > 10
         cond_b_liquidity = latest['VMA5'] / 1000 > 100
-        
         ma_max = max(latest['MA10'], latest['MA20'], latest['MA60'])
         ma_min = min(latest['MA10'], latest['MA20'], latest['MA60'])
         cond_b_ma_convergence = (ma_max / ma_min) < 1.05 and (latest['Close'] > ma_max)
@@ -95,12 +146,18 @@ def check_stock(ticker, name):
         if not (tech_a_pass or tech_b_pass):
             return None
 
+        code_only = ticker.split('.')[0]
+        inst = inst_data.get(code_only, {"FI": 0, "IT": 0})
+        
+        if code_only in inst_data:
+            if (inst["FI"] + inst["IT"]) < 0:
+                return None
+
         stock = yf.Ticker(ticker)
         info = stock.info
         capital = (info.get('sharesOutstanding') or 0) * 10
         book_value = info.get('bookValue') or 0
         
-        # 新增實戰指標：營收 YoY 與月線乖離率
         rev_growth = info.get('revenueGrowth')
         rev_growth_pct = round(rev_growth * 100, 2) if rev_growth is not None else None
         bias_20 = ((latest['Close'] - latest['MA20']) / latest['MA20']) * 100
@@ -109,30 +166,15 @@ def check_stock(ticker, name):
         is_strategy_b = tech_b_pass and (capital < 5_000_000_000)
 
         if is_strategy_a or is_strategy_b:
-            industry_en = info.get('industry', '未知')
-            ind_map = {
-                'Semiconductors': '半導體', 'Electronic Components': '電子零組件', 
-                'Computer Hardware': '電腦及週邊', 'Communication Equipment': '通信網路',
-                'Electronic Gaming & Multimedia': '光電業', 'Consumer Electronics': '消費電子',
-                'Auto Parts': '汽車零組件', 'Biotechnology': '生技醫療',
-                'Metal Fabrication': '金屬製造', 'Specialty Industrial Machinery': '特殊工業機械',
-                'Tools & Accessories': '工具與配件', 'Electronics & Computer Distribution': '電子電腦通路',
-                'Specialty Retail': '專賣零售', 'Software - Application': '軟體應用',
-                'Internet Content & Information': '網路資訊'
-            }
-            industry = ind_map.get(industry_en, industry_en)
-
+            industry = info.get('industry', '未知')
             vol_ratio = latest['Volume'] / latest['VMA5'] if latest['VMA5'] > 0 else 0
-            if vol_ratio >= 3: heat = "極高"
-            elif vol_ratio >= 1.5: heat = "高"
-            else: heat = "一般"
-
+            heat = "極高" if vol_ratio >= 3 else "高" if vol_ratio >= 1.5 else "一般"
             exchange = "TWSE" if ticker.endswith(".TW") else "TPEX"
 
             return {
                 'stock_data': {
                     '交易所': exchange,
-                    '股票代號': ticker.split('.')[0],
+                    '股票代號': code_only,
                     '股票名稱': name,
                     '產業面': industry,
                     '熱門程度': heat,
@@ -141,6 +183,8 @@ def check_stock(ticker, name):
                     '成交量(張)': int(volume_lots),
                     '乖離率(%)': round(float(bias_20), 2),
                     '營收YoY(%)': rev_growth_pct,
+                    '外資買賣(張)': inst["FI"],
+                    '投信買賣(張)': inst["IT"],
                     '進榜天數': 1
                 },
                 'is_a': is_strategy_a,
@@ -151,50 +195,29 @@ def check_stock(ticker, name):
     return None
 
 def get_streak(code, list_name, prev_data):
-    prev_list = prev_data.get(list_name, [])
-    for stock in prev_list:
+    for stock in prev_data.get(list_name, []):
         if stock.get('股票代號') == code:
             return stock.get('進榜天數', 1) + 1
     return 1
 
 def main():
-    # 1. 載入前次歷史資料
     previous_data = {"update_date": "無", "original_strategy": [], "ai_strategy": [], "intersection": []}
-    
-    # 【防呆機制】：確保檔案存在，且檔案大小大於 0 byte 才去讀取
     if os.path.exists('daily_hot_stocks.json') and os.path.getsize('daily_hot_stocks.json') > 0:
         try:
             with open('daily_hot_stocks.json', 'r', encoding='utf-8') as f:
                 old_json = json.load(f)
-                if "latest_data" in old_json:
-                    previous_data = old_json["latest_data"]
-                else:
-                    # 舊版格式過渡處理
-                    update_date = old_json.get("update_time", "").split(" ")[0] if "update_time" in old_json else "無"
-                    previous_data = {
-                        "update_date": update_date,
-                        "original_strategy": old_json.get("original_strategy", []),
-                        "ai_strategy": old_json.get("ai_strategy", []),
-                        "intersection": old_json.get("intersection", [])
-                    }
-        except Exception as e:
-            print(f"讀取舊檔失敗: {e}")
+                previous_data = old_json.get("latest_data", previous_data)
+        except Exception:
+            pass
 
-    # 2. 獲取代號並掃描
     tickers_dict = get_all_tw_tickers()
-    if not tickers_dict: 
-        print("【警告】無法獲取全市場代號，啟用防崩潰備用清單 (共 3 檔)。")
-        tickers_dict = {'2330.TW': '台積電', '2317.TW': '鴻海', '2454.TW': '聯發科'}
-    else:
-        print(f"【執行確認】成功獲取市場代號，開始掃描共 {len(tickers_dict)} 檔標的...")
+    if not tickers_dict: tickers_dict = {'2330.TW': '台積電', '2317.TW': '鴻海', '2454.TW': '聯發科'}
+    inst_data = get_institutional_data()
         
-    results_intersection = []
-    results_original = []
-    results_ai = []
+    results_intersection, results_original, results_ai = [], [], []
 
-    # 注意：這裡已經修正為只傳入 t, n 兩個參數
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        futures = {executor.submit(check_stock, t, n): t for t, n in tickers_dict.items()}
+        futures = {executor.submit(check_stock, t, n, inst_data): t for t, n in tickers_dict.items()}
         for future in concurrent.futures.as_completed(futures):
             res = future.result()
             if res:
@@ -203,34 +226,41 @@ def main():
                 if res['is_b']: results_ai.append(s_data)
                 if res['is_a'] and res['is_b']: results_intersection.append(s_data)
 
-    # 3. 計算連續進榜天數
-    for s in results_original: s['進榜天數'] = get_streak(s['股票代號'], 'original_strategy', previous_data)
-    for s in results_ai: s['進榜天數'] = get_streak(s['股票代號'], 'ai_strategy', previous_data)
-    for s in results_intersection: s['進榜天數'] = get_streak(s['股票代號'], 'intersection', previous_data)
+    for lst, name in [(results_original, 'original_strategy'), (results_ai, 'ai_strategy'), (results_intersection, 'intersection')]:
+        for s in lst:
+            s['進榜天數'] = get_streak(s['股票代號'], name, previous_data)
+            sentiment, news_url = analyze_news_sentiment(s['股票代號'])
+            s['情緒分析'] = sentiment
+            s['新聞連結'] = news_url
 
-    # 4. 輸出雙層結構 JSON
     tz_tw = timezone(timedelta(hours=8))
     now = datetime.now(tz_tw)
-    update_time_str = now.strftime("%Y-%m-%d %H:%M:%S")
-    update_date_str = now.strftime("%Y-%m-%d")
-
-    latest_data = {
-        "update_date": update_date_str,
-        "original_strategy": results_original,
-        "ai_strategy": results_ai,
-        "intersection": results_intersection
-    }
-
+    
     output_data = {
-        "update_time": update_time_str,
-        "latest_data": latest_data,
+        "update_time": now.strftime("%Y-%m-%d %H:%M:%S"),
+        "latest_data": {
+            "update_date": now.strftime("%Y-%m-%d"),
+            "original_strategy": results_original,
+            "ai_strategy": results_ai,
+            "intersection": results_intersection
+        },
         "previous_data": previous_data
     }
 
     with open('daily_hot_stocks.json', 'w', encoding='utf-8') as f:
         json.dump(output_data, f, ensure_ascii=False, indent=4)
         
-    print(f"掃描完成。交集: {len(results_intersection)} 檔, 原始: {len(results_original)} 檔, AI量化: {len(results_ai)} 檔。")
+    all_results = []
+    for s in results_original: s_copy = s.copy(); s_copy['策略'] = '飆股策略'; all_results.append(s_copy)
+    for s in results_ai: s_copy = s.copy(); s_copy['策略'] = 'AI選股策略'; all_results.append(s_copy)
+    for s in results_intersection: s_copy = s.copy(); s_copy['策略'] = '核心交集'; all_results.append(s_copy)
+
+    if all_results:
+        df_new = pd.DataFrame(all_results)
+        df_new.insert(0, '日期', now.strftime("%Y-%m-%d"))
+        csv_file = 'history_records.csv'
+        file_exists = os.path.isfile(csv_file) and os.path.getsize(csv_file) > 0
+        df_new.to_csv(csv_file, mode='a', index=False, encoding='utf-8-sig', header=not file_exists)
 
 if __name__ == "__main__":
     main()
