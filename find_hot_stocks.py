@@ -17,6 +17,7 @@ warnings.filterwarnings("ignore")
 
 # ==========================================
 # 系統設定區 (Telegram 推播)
+# 請將 Token 與 Chat ID 填入雙引號內部，雙引號絕對不可刪除！
 # ==========================================
 TG_BOT_TOKEN = "8954208808:AAFj4n1yqTLYfLcHgGrET4RD1d5EF24Vqbw" 
 TG_CHAT_ID = "8665090039"
@@ -38,7 +39,7 @@ headers_fake = {
 global_session.headers.update(headers_fake)
 
 def send_telegram_notify(msg):
-    if not TG_BOT_TOKEN or TG_BOT_TOKEN == "請在此填寫":
+    if not TG_BOT_TOKEN or TG_BOT_TOKEN == "8954208808:AAFj4n1yqTLYfLcHgGrET4RD1d5EF24Vqbw":
         return
     url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
     data = {"chat_id": TG_CHAT_ID, "text": msg}
