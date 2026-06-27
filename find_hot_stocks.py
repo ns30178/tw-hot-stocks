@@ -18,8 +18,8 @@ warnings.filterwarnings("ignore")
 # ==========================================
 # 系統設定區 (Telegram 推播)
 # ==========================================
-TG_BOT_TOKEN = "請在此填寫" 
-TG_CHAT_ID = "請在此填寫"
+TG_BOT_TOKEN = "8954208808:AAFj4n1yqTLYfLcHgGrET4RD1d5EF24Vqbw" 
+TG_CHAT_ID = "8665090039"
 # ==========================================
 
 global_session = requests.Session()
@@ -27,11 +27,13 @@ retry = Retry(connect=5, backoff_factor=1, status_forcelist=[403, 429, 500, 502,
 adapter = HTTPAdapter(max_retries=retry)
 global_session.mount('http://', adapter)
 global_session.mount('https://', adapter)
-# 加入更真實的瀏覽器偽裝，避免被證交所阻擋
+
+# 強力偽裝標頭，降低被證交所阻擋的機率
 headers_fake = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'application/json, text/javascript, */*; q=0.01',
     'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Connection': 'keep-alive',
 }
 global_session.headers.update(headers_fake)
 
@@ -57,7 +59,7 @@ def get_all_tw_tickers():
             df = df.iloc[1:]
             for _, row in df.iterrows():
                 raw_data = str(row['有價證券代號及名稱'])
-                parts = raw_data.split('　')
+                parts = raw_data.split(' ')
                 if len(parts) >= 2:
                     code = parts[0].strip()
                     name = parts[1].strip()
@@ -69,41 +71,81 @@ def get_all_tw_tickers():
 
 def get_institutional_data():
     inst_data = {}
-    # TWSE (上市) - 增加 Timeout 與偽裝
-    try:
-        res = requests.get("https://openapi.twse.com.tw/v1/fund/T86_ALL", headers=headers_fake, timeout=30)
-        if res.status_code == 200:
-            for item in res.json():
-                code = item.get("Code")
-                fi = item.get("Foreign_Investor_Diff", 0)
-                it = item.get("Investment_Trust_Diff", 0)
-                try:
-                    inst_data[code] = {
-                        "FI": int(str(fi).replace(',', '')) // 1000,
-                        "IT": int(str(it).replace(',', '')) // 1000
-                    }
-                except ValueError:
-                    pass
-    except Exception as e:
-        print(f"TWSE API 讀取失敗: {e}")
+    tw_time = datetime.now(timezone(timedelta(hours=8)))
     
-    # TPEX (上櫃)
-    try:
-        res_tpex = requests.get("https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=json", headers=headers_fake, timeout=30)
-        if res_tpex.status_code == 200:
-            data = res_tpex.json().get('aaData', [])
-            for row in data:
-                if len(row) >= 12:
-                    code = row[0]
+    # 動態回溯交易日迴圈：最多往前找 5 天，只要某天有抓到資料就判定為最近交易日並停止
+    for i in range(5):
+        check_time = tw_time - timedelta(days=i)
+        
+        # 避開週末參數
+        if check_time.weekday() >= 5:
+            continue
+            
+        twse_date = check_time.strftime("%Y%m%d")
+        tpex_date = f"{check_time.year - 1911}/{check_time.strftime('%m/%d')}"
+        data_found = False
+        
+        # 1. 抓取上市 (TWSE)
+        try:
+            # 優先嘗試 OpenAPI
+            res_open = requests.get("https://openapi.twse.com.tw/v1/fund/T86_ALL", headers=headers_fake, timeout=10)
+            if res_open.status_code == 200 and len(res_open.json()) > 100:
+                for item in res_open.json():
+                    code = item.get("Code")
+                    fi = item.get("Foreign_Investor_Diff", 0)
+                    it = item.get("Investment_Trust_Diff", 0)
                     try:
-                        fi = int(str(row[8]).replace(',', '').strip()) // 1000
-                        it = int(str(row[11]).replace(',', '').strip()) // 1000
-                        inst_data[code] = {"FI": fi, "IT": it}
+                        inst_data[code] = {
+                            "FI": int(str(fi).replace(',', '')) // 1000,
+                            "IT": int(str(it).replace(',', '')) // 1000
+                        }
                     except ValueError:
                         pass
-    except Exception as e:
-        print(f"TPEX API 讀取失敗: {e}")
-        
+                data_found = True
+            else:
+                # 備援：指定日期爬取
+                url_twse = f"https://www.twse.com.tw/fund/T86?response=json&date={twse_date}&selectType=ALL"
+                res_twse = requests.get(url_twse, headers=headers_fake, timeout=10)
+                if res_twse.status_code == 200:
+                    data = res_twse.json().get('data', [])
+                    if data:
+                        for row in data:
+                            code = row[0]
+                            try:
+                                fi = int(str(row[4]).replace(',', '').strip()) // 1000
+                                it = int(str(row[10]).replace(',', '').strip()) // 1000
+                                inst_data[code] = {"FI": fi, "IT": it}
+                            except ValueError:
+                                pass
+                        data_found = True
+        except Exception:
+            pass
+
+        # 2. 抓取上櫃 (TPEX)
+        try:
+            url_tpex = f"https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=json&d={tpex_date}"
+            res_tpex = requests.get(url_tpex, headers=headers_fake, timeout=10)
+            if res_tpex.status_code == 200:
+                json_data = res_tpex.json()
+                data = json_data.get('aaData', json_data.get('data', []))
+                if data:
+                    for row in data:
+                        if len(row) >= 12:
+                            code = row[0]
+                            try:
+                                fi = int(str(row[8]).replace(',', '').strip()) // 1000
+                                it = int(str(row[11]).replace(',', '').strip()) // 1000
+                                inst_data[code] = {"FI": fi, "IT": it}
+                            except ValueError:
+                                pass
+                    data_found = True
+        except Exception:
+            pass
+            
+        # 若該日有抓取到任何資料，即認定為有效交易日，結束迴圈
+        if data_found and len(inst_data) > 0:
+            break
+            
     return inst_data
 
 def analyze_news_sentiment(code):
