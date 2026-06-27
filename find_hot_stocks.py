@@ -17,9 +17,10 @@ warnings.filterwarnings("ignore")
 
 # ==========================================
 # 系統設定區 (Telegram 推播)
+# 請務必保留前後的「雙引號 ("")」！
 # ==========================================
-TG_BOT_TOKEN = 8954208808:AAFj4n1yqTLYfLcHgGrET4RD1d5EF24Vqbw
-TG_CHAT_ID = 8665090039
+TG_BOT_TOKEN = "請在此填寫" 
+TG_CHAT_ID = "請在此填寫"
 # ==========================================
 
 global_session = requests.Session()
@@ -30,7 +31,7 @@ global_session.mount('https://', adapter)
 global_session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
 
 def send_telegram_notify(msg):
-    if not TG_BOT_TOKEN or TG_BOT_TOKEN == "請填入您的Bot Token":
+    if not TG_BOT_TOKEN or TG_BOT_TOKEN == "請在此填寫":
         return
     url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
     data = {"chat_id": TG_CHAT_ID, "text": msg}
@@ -51,7 +52,7 @@ def get_all_tw_tickers():
             df = df.iloc[1:]
             for _, row in df.iterrows():
                 raw_data = str(row['有價證券代號及名稱'])
-                parts = raw_data.split(' ')
+                parts = raw_data.split('　')
                 if len(parts) >= 2:
                     code = parts[0].strip()
                     name = parts[1].strip()
@@ -132,7 +133,6 @@ def analyze_news_sentiment(code):
 def check_stock(ticker, name, inst_data):
     try:
         time.sleep(random.uniform(0.1, 0.4)) 
-        # auto_adjust=True 讓過去價格自動還原權息
         data = yf.download(ticker, period="1y", auto_adjust=True, progress=False, session=global_session)
         if len(data) < 200: return None
         if isinstance(data.columns, pd.MultiIndex): data.columns = data.columns.droplevel(1)
@@ -295,6 +295,10 @@ def calculate_performance(csv_file):
 
 def main():
     try:
+        tz_tw = timezone(timedelta(hours=8))
+        now = datetime.now(tz_tw)
+        update_date_str = now.strftime("%Y-%m-%d")
+
         previous_data = {"update_date": "無", "original_strategy": [], "ai_strategy": [], "intersection": []}
         if os.path.exists('daily_hot_stocks.json') and os.path.getsize('daily_hot_stocks.json') > 0:
             try:
@@ -303,6 +307,9 @@ def main():
                     previous_data = old_json.get("latest_data", previous_data)
             except Exception:
                 pass
+
+        # 檢查是否為同一天執行，若是則不累加天數
+        is_same_day = previous_data.get("update_date") == update_date_str
 
         tickers_dict = get_all_tw_tickers()
         if not tickers_dict: tickers_dict = {'2330.TW': '台積電'}
@@ -320,10 +327,12 @@ def main():
                     if res['is_b']: results_ai.append(s_data)
                     if res['is_a'] and res['is_b']: results_intersection.append(s_data)
 
+        # 改良版的天數計算機制
         def get_streak(code, list_name):
             for stock in previous_data.get(list_name, []):
                 if stock.get('股票代號') == code:
-                    return stock.get('進榜天數', 1) + 1
+                    base_streak = stock.get('進榜天數', 1)
+                    return base_streak if is_same_day else base_streak + 1
             return 1
 
         for lst, name in [(results_original, 'original_strategy'), (results_ai, 'ai_strategy'), (results_intersection, 'intersection')]:
@@ -332,10 +341,6 @@ def main():
                 sentiment, news_url = analyze_news_sentiment(s['股票代號'])
                 s['情緒分析'] = sentiment
                 s['新聞連結'] = news_url
-
-        tz_tw = timezone(timedelta(hours=8))
-        now = datetime.now(tz_tw)
-        update_date_str = now.strftime("%Y-%m-%d")
         
         # 寫入 CSV 以供計算
         csv_file = 'history_records.csv'
