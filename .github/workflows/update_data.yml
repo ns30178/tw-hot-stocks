@@ -33,7 +33,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install yfinance pandas requests lxml html5lib beautifulsoup4
+        pip install yfinance pandas requests lxml html5lib beautifulsoup4 cloudscraper
 
     - name: Run script
       run: python find_hot_stocks.py
