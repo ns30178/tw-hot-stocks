@@ -20,7 +20,6 @@
         <p class="text-gray-600 mt-2 font-bold" id="update-time">資料更新時間：讀取中...</p>
     </div>
 
-    <!-- 1. 最新資料區塊 -->
     <div id="latest-section" class="max-w-6xl mx-auto mb-10">
         <h2 class="text-2xl font-bold text-gray-800 mb-4 border-l-4 border-gray-800 pl-3" id="latest-date">資料時間：今日</h2>
         <div id="latest-original"></div>
@@ -28,7 +27,6 @@
         <div id="latest-intersection"></div>
     </div>
 
-    <!-- 2. 歷史摺疊資料區塊 -->
     <details class="max-w-6xl mx-auto mb-10 group">
         <summary class="text-2xl font-bold text-gray-600 mb-4 border-l-4 border-gray-400 pl-3 cursor-pointer outline-none">
             展開前次歷史資料 (摺疊收納)
@@ -41,17 +39,14 @@
         </div>
     </details>
 
-    <!-- 3. 績效統計面板 (已移至最下方) -->
     <div id="performance-board" class="max-w-6xl mx-auto mb-10 hidden">
         <div class="bg-gray-800 text-white p-4 rounded-lg shadow-lg">
             <h2 class="text-xl font-bold mb-3 border-l-4 border-yellow-400 pl-3">策略績效回測統計 (歷史進榜結算)</h2>
             <div id="stats-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- JavaScript 動態注入 -->
-            </div>
+                </div>
         </div>
     </div>
 
-    <!-- 彈出式線圖視窗 -->
     <div id="tv-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
         <div class="bg-gray-900 w-full max-w-5xl h-[80vh] rounded-lg shadow-2xl relative flex flex-col">
             <button onclick="closeModal()" class="absolute -top-4 -right-4 bg-red-600 text-white rounded-full w-10 h-10 text-xl font-bold border-2 border-white hover:bg-red-700 z-50">&times;</button>
@@ -68,7 +63,7 @@
             { name: '漲幅%', class: '', key: '單日漲跌幅(%)' },
             { name: '乖離率%', class: 'hidden md:table-cell', key: '乖離率(%)' },
             { name: '營收YoY', class: 'hidden md:table-cell', key: '營收YoY(%)' },
-            { name: '法人買賣超 (點擊看主力)', class: 'hidden md:table-cell', key: '外資買賣(張)' },
+            { name: '法人(張)', class: '', key: '外資買賣(張)' }, // 解除手機版隱藏，標題縮短
             { name: '消息面', class: '', key: '情緒分析' }
         ];
 
@@ -137,10 +132,10 @@
                         <td class="p-2 font-bold ${upDownClass}">${s['單日漲跌幅(%)'] ? (s['單日漲跌幅(%)'] > 0 ? '+' : '') + s['單日漲跌幅(%)'] : '-'}</td>
                         <td class="p-2 hidden md:table-cell">${s['乖離率(%)'] !== null ? s['乖離率(%)'] : '-'}</td>
                         <td class="p-2 hidden md:table-cell">${s['營收YoY(%)'] !== null ? s['營收YoY(%)'] : '-'}</td>
-                        <td class="p-2 hidden md:table-cell text-sm">
-                            <a href="${brokerLink}" target="_blank" class="hover:underline hover:text-blue-600 block">
-                                外資: <span class="${fiClass}">${fiVal}</span><br>
-                                投信: <span class="${itClass}">${itVal}</span>
+                        <td class="p-2 text-sm"> 
+                            <a href="${brokerLink}" target="_blank" class="hover:underline hover:text-blue-600 block" title="點擊看主力/分點">
+                                外: <span class="${fiClass}">${fiVal}</span><br>
+                                投: <span class="${itClass}">${itVal}</span>
                             </a>
                         </td>
                         <td class="p-2">
