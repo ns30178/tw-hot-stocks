@@ -8,6 +8,7 @@ import random
 import json
 import os
 import traceback
+import cloudscraper
 from datetime import datetime, timezone, timedelta
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -17,25 +18,20 @@ warnings.filterwarnings("ignore")
 
 # ==========================================
 # 系統設定區 (Telegram 推播)
-# 請務必保留前後的「雙引號 ("")」！
 # ==========================================
 TG_BOT_TOKEN = "8954208808:AAFj4n1yqTLYfLcHgGrET4RD1d5EF24Vqbw" 
 TG_CHAT_ID = "8665090039"
 # ==========================================
 
+# 建立突破防火牆專用的 Scraper (對付證交所)
+scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
+
+# 一般的 Session (給 Yahoo Finance 使用)
 global_session = requests.Session()
-retry = Retry(connect=5, backoff_factor=1, status_forcelist=[403, 429, 500, 502, 503, 504])
+retry = Retry(connect=5, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
 adapter = HTTPAdapter(max_retries=retry)
 global_session.mount('http://', adapter)
 global_session.mount('https://', adapter)
-
-headers_fake = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
-    'Connection': 'keep-alive',
-}
-global_session.headers.update(headers_fake)
 
 def send_telegram_notify(msg):
     if not TG_BOT_TOKEN or TG_BOT_TOKEN == "8954208808:AAFj4n1yqTLYfLcHgGrET4RD1d5EF24Vqbw":
@@ -49,25 +45,38 @@ def send_telegram_notify(msg):
 
 def get_all_tw_tickers():
     tickers = {}
+    # 策略 1：使用證交所與櫃買中心 OpenAPI 獲取清單 (最不易被擋)
     try:
-        modes = {'2': '.TW', '4': '.TWO'}
-        for mode, suffix in modes.items():
-            url = f"https://isin.twse.com.tw/isin/C_public.jsp?strMode={mode}"
-            # 升級：改用具備重試機制的 global_session 突破封鎖
-            res = global_session.get(url, timeout=20)
-            df = pd.read_html(res.text)[0]
-            df.columns = df.iloc[0]
-            df = df.iloc[1:]
-            for _, row in df.iterrows():
-                raw_data = str(row['有價證券代號及名稱'])
-                parts = raw_data.split(' ')
-                if len(parts) >= 2:
-                    code = parts[0].strip()
-                    name = parts[1].strip()
-                    if len(code) == 4 and code.isdigit():
-                        tickers[f"{code}{suffix}"] = name
-    except Exception as e:
-        print(f"⚠️ 無法取得股票代號清單: {e}")
+        res = scraper.get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", timeout=15)
+        if res.status_code == 200:
+            for item in res.json():
+                code = item.get("Code")
+                if code and len(code) == 4 and code.isdigit():
+                    tickers[f"{code}.TW"] = item.get("Name")
+    except Exception: pass
+
+    try:
+        res = scraper.get("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes", timeout=15)
+        if res.status_code == 200:
+            for item in res.json():
+                code = item.get("SecuritiesCompanyCode")
+                if code and len(code) == 4 and code.isdigit():
+                    tickers[f"{code}.TWO"] = item.get("CompanyName")
+    except Exception: pass
+
+    # 策略 2：若 OpenAPI 失敗，切換至 Github 開源靜態清單備援
+    if len(tickers) < 1000:
+        print("⚠️ OpenAPI 獲取清單失敗，啟用 Github 備援清單...")
+        try:
+            res = scraper.get("https://raw.githubusercontent.com/shihzhan/twstock/master/twstock/codes.json", timeout=15)
+            if res.status_code == 200:
+                data = res.json()
+                for code, info in data.items():
+                    if info['type'] == '股票' and len(code) == 4:
+                        suffix = ".TW" if info['market'] == '上市' else ".TWO"
+                        tickers[f"{code}{suffix}"] = info['name']
+        except Exception: pass
+
     return tickers
 
 def get_institutional_data():
@@ -83,8 +92,9 @@ def get_institutional_data():
         tpex_date = f"{check_time.year - 1911}/{check_time.strftime('%m/%d')}"
         data_found = False
         
+        # 1. 抓取上市 (TWSE)
         try:
-            res_open = requests.get("https://openapi.twse.com.tw/v1/fund/T86_ALL", headers=headers_fake, timeout=10)
+            res_open = scraper.get("https://openapi.twse.com.tw/v1/fund/T86_ALL", timeout=10)
             if res_open.status_code == 200 and len(res_open.json()) > 100:
                 for item in res_open.json():
                     code = item.get("Code")
@@ -95,12 +105,12 @@ def get_institutional_data():
                             "FI": int(str(fi).replace(',', '')) // 1000,
                             "IT": int(str(it).replace(',', '')) // 1000
                         }
-                    except ValueError:
-                        pass
+                    except ValueError: pass
                 data_found = True
             else:
-                url_twse = f"https://www.twse.com.tw/fund/T86?response=json&date={twse_date}&selectType=ALL"
-                res_twse = requests.get(url_twse, headers=headers_fake, timeout=10)
+                # 使用 RWD 新版網址進行備援
+                url_twse = f"https://www.twse.com.tw/rwd/zh/fund/T86?date={twse_date}&selectType=ALL&response=json"
+                res_twse = scraper.get(url_twse, timeout=10)
                 if res_twse.status_code == 200:
                     data = res_twse.json().get('data', [])
                     if data:
@@ -110,15 +120,14 @@ def get_institutional_data():
                                 fi = int(str(row[4]).replace(',', '').strip()) // 1000
                                 it = int(str(row[10]).replace(',', '').strip()) // 1000
                                 inst_data[code] = {"FI": fi, "IT": it}
-                            except ValueError:
-                                pass
+                            except ValueError: pass
                         data_found = True
-        except Exception:
-            pass
+        except Exception: pass
 
+        # 2. 抓取上櫃 (TPEX)
         try:
             url_tpex = f"https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=json&d={tpex_date}"
-            res_tpex = requests.get(url_tpex, headers=headers_fake, timeout=10)
+            res_tpex = scraper.get(url_tpex, timeout=10)
             if res_tpex.status_code == 200:
                 json_data = res_tpex.json()
                 data = json_data.get('aaData', json_data.get('data', []))
@@ -130,11 +139,9 @@ def get_institutional_data():
                                 fi = int(str(row[8]).replace(',', '').strip()) // 1000
                                 it = int(str(row[11]).replace(',', '').strip()) // 1000
                                 inst_data[code] = {"FI": fi, "IT": it}
-                            except ValueError:
-                                pass
+                            except ValueError: pass
                     data_found = True
-        except Exception:
-            pass
+        except Exception: pass
             
         if data_found and len(inst_data) > 0:
             break
@@ -146,7 +153,7 @@ def analyze_news_sentiment(code):
     neg_words = ['衰退', '減', '降', '不如預期', '保守', '下修', '看壞', '出脫', '跌停', '虧損', '法說會失靈', '利空', '賣超', '走弱']
     url = f"https://tw.stock.yahoo.com/quote/{code}/news"
     try:
-        res = requests.get(url, headers=headers_fake, timeout=10)
+        res = scraper.get(url, timeout=10)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
             titles = soup.find_all('h3')
@@ -341,15 +348,14 @@ def main():
                 with open('daily_hot_stocks.json', 'r', encoding='utf-8') as f:
                     old_json = json.load(f)
                     previous_data = old_json.get("latest_data", previous_data)
-            except Exception:
-                pass
+            except Exception: pass
 
         is_same_day = previous_data.get("update_date") == update_date_str
 
-        print("📡 正在向證交所請求全台股上市櫃清單...")
+        print("📡 正在向證交所請求全台股上市櫃清單 (套用 Cloudscraper 破防模組)...")
         tickers_dict = get_all_tw_tickers()
         if not tickers_dict: 
-            print("⚠️ 嚴重警告：無法取得 2000 檔名單，伺服器可能被阻擋，僅使用備用名單測試！")
+            print("⚠️ 嚴重警告：所有清單管道皆失效，僅使用備用名單測試！")
             tickers_dict = {'2330.TW': '台積電', '2317.TW': '鴻海', '2454.TW': '聯發科'}
         else:
             print(f"✅ 成功取得 {len(tickers_dict)} 檔上市櫃股票，準備執行運算。")
