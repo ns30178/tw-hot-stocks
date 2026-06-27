@@ -17,18 +17,23 @@ warnings.filterwarnings("ignore")
 
 # ==========================================
 # 系統設定區 (Telegram 推播)
-# 請務必保留前後的「雙引號 ("")」！
 # ==========================================
 TG_BOT_TOKEN = "請在此填寫" 
 TG_CHAT_ID = "請在此填寫"
 # ==========================================
 
 global_session = requests.Session()
-retry = Retry(connect=3, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504])
+retry = Retry(connect=5, backoff_factor=1, status_forcelist=[403, 429, 500, 502, 503, 504])
 adapter = HTTPAdapter(max_retries=retry)
 global_session.mount('http://', adapter)
 global_session.mount('https://', adapter)
-global_session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+# 加入更真實的瀏覽器偽裝，避免被證交所阻擋
+headers_fake = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json, text/javascript, */*; q=0.01',
+    'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+}
+global_session.headers.update(headers_fake)
 
 def send_telegram_notify(msg):
     if not TG_BOT_TOKEN or TG_BOT_TOKEN == "請在此填寫":
@@ -46,7 +51,7 @@ def get_all_tw_tickers():
         modes = {'2': '.TW', '4': '.TWO'}
         for mode, suffix in modes.items():
             url = f"https://isin.twse.com.tw/isin/C_public.jsp?strMode={mode}"
-            res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+            res = requests.get(url, headers=headers_fake, timeout=15)
             df = pd.read_html(res.text)[0]
             df.columns = df.iloc[0]
             df = df.iloc[1:]
@@ -64,9 +69,9 @@ def get_all_tw_tickers():
 
 def get_institutional_data():
     inst_data = {}
-    # TWSE (上市)
+    # TWSE (上市) - 增加 Timeout 與偽裝
     try:
-        res = requests.get("https://openapi.twse.com.tw/v1/fund/T86_ALL", timeout=10)
+        res = requests.get("https://openapi.twse.com.tw/v1/fund/T86_ALL", headers=headers_fake, timeout=30)
         if res.status_code == 200:
             for item in res.json():
                 code = item.get("Code")
@@ -79,12 +84,12 @@ def get_institutional_data():
                     }
                 except ValueError:
                     pass
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"TWSE API 讀取失敗: {e}")
     
     # TPEX (上櫃)
     try:
-        res_tpex = requests.get("https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=json", timeout=10)
+        res_tpex = requests.get("https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=json", headers=headers_fake, timeout=30)
         if res_tpex.status_code == 200:
             data = res_tpex.json().get('aaData', [])
             for row in data:
@@ -96,8 +101,8 @@ def get_institutional_data():
                         inst_data[code] = {"FI": fi, "IT": it}
                     except ValueError:
                         pass
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"TPEX API 讀取失敗: {e}")
         
     return inst_data
 
@@ -107,7 +112,7 @@ def analyze_news_sentiment(code):
     url = f"https://tw.stock.yahoo.com/quote/{code}/news"
     
     try:
-        res = requests.get(url, timeout=5)
+        res = requests.get(url, headers=headers_fake, timeout=10)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
             titles = soup.find_all('h3')
@@ -308,7 +313,6 @@ def main():
             except Exception:
                 pass
 
-        # 檢查是否為同一天執行，若是則不累加天數
         is_same_day = previous_data.get("update_date") == update_date_str
 
         tickers_dict = get_all_tw_tickers()
@@ -327,7 +331,6 @@ def main():
                     if res['is_b']: results_ai.append(s_data)
                     if res['is_a'] and res['is_b']: results_intersection.append(s_data)
 
-        # 改良版的天數計算機制
         def get_streak(code, list_name):
             for stock in previous_data.get(list_name, []):
                 if stock.get('股票代號') == code:
@@ -342,7 +345,6 @@ def main():
                 s['情緒分析'] = sentiment
                 s['新聞連結'] = news_url
         
-        # 寫入 CSV 以供計算
         csv_file = 'history_records.csv'
         all_results = []
         for s in results_original: s_copy = s.copy(); s_copy['策略'] = '飆股策略'; all_results.append(s_copy)
@@ -354,7 +356,6 @@ def main():
             file_exists = os.path.isfile(csv_file) and os.path.getsize(csv_file) > 0
             df_new.to_csv(csv_file, mode='a', index=False, encoding='utf-8-sig', header=not file_exists)
 
-        # 執行績效結算
         perf_stats = calculate_performance(csv_file)
 
         output_data = {
@@ -372,7 +373,6 @@ def main():
         with open('daily_hot_stocks.json', 'w', encoding='utf-8') as f:
             json.dump(output_data, f, ensure_ascii=False, indent=4)
             
-        # 發送 Telegram 推播
         notify_msg = (
             f"\n📊 台股雙策略觀測站 更新完成\n"
             f"📅 日期：{update_date_str}\n\n"
