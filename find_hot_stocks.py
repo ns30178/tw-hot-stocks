@@ -17,7 +17,7 @@ warnings.filterwarnings("ignore")
 
 # ==========================================
 # 系統設定區 (Telegram 推播)
-# 請將 Token 與 Chat ID 填入雙引號內部，雙引號絕對不可刪除！
+# 請務必保留前後的「雙引號 ("")」！
 # ==========================================
 TG_BOT_TOKEN = "8954208808:AAFj4n1yqTLYfLcHgGrET4RD1d5EF24Vqbw" 
 TG_CHAT_ID = "8665090039"
@@ -29,10 +29,9 @@ adapter = HTTPAdapter(max_retries=retry)
 global_session.mount('http://', adapter)
 global_session.mount('https://', adapter)
 
-# 強力偽裝標頭，降低被證交所阻擋的機率
 headers_fake = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'application/json, text/javascript, */*; q=0.01',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
     'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
     'Connection': 'keep-alive',
 }
@@ -54,7 +53,8 @@ def get_all_tw_tickers():
         modes = {'2': '.TW', '4': '.TWO'}
         for mode, suffix in modes.items():
             url = f"https://isin.twse.com.tw/isin/C_public.jsp?strMode={mode}"
-            res = requests.get(url, headers=headers_fake, timeout=15)
+            # 升級：改用具備重試機制的 global_session 突破封鎖
+            res = global_session.get(url, timeout=20)
             df = pd.read_html(res.text)[0]
             df.columns = df.iloc[0]
             df = df.iloc[1:]
@@ -66,19 +66,16 @@ def get_all_tw_tickers():
                     name = parts[1].strip()
                     if len(code) == 4 and code.isdigit():
                         tickers[f"{code}{suffix}"] = name
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"⚠️ 無法取得股票代號清單: {e}")
     return tickers
 
 def get_institutional_data():
     inst_data = {}
     tw_time = datetime.now(timezone(timedelta(hours=8)))
     
-    # 動態回溯交易日迴圈：最多往前找 5 天，只要某天有抓到資料就判定為最近交易日並停止
     for i in range(5):
         check_time = tw_time - timedelta(days=i)
-        
-        # 避開週末參數
         if check_time.weekday() >= 5:
             continue
             
@@ -86,9 +83,7 @@ def get_institutional_data():
         tpex_date = f"{check_time.year - 1911}/{check_time.strftime('%m/%d')}"
         data_found = False
         
-        # 1. 抓取上市 (TWSE)
         try:
-            # 優先嘗試 OpenAPI
             res_open = requests.get("https://openapi.twse.com.tw/v1/fund/T86_ALL", headers=headers_fake, timeout=10)
             if res_open.status_code == 200 and len(res_open.json()) > 100:
                 for item in res_open.json():
@@ -104,7 +99,6 @@ def get_institutional_data():
                         pass
                 data_found = True
             else:
-                # 備援：指定日期爬取
                 url_twse = f"https://www.twse.com.tw/fund/T86?response=json&date={twse_date}&selectType=ALL"
                 res_twse = requests.get(url_twse, headers=headers_fake, timeout=10)
                 if res_twse.status_code == 200:
@@ -122,7 +116,6 @@ def get_institutional_data():
         except Exception:
             pass
 
-        # 2. 抓取上櫃 (TPEX)
         try:
             url_tpex = f"https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=json&d={tpex_date}"
             res_tpex = requests.get(url_tpex, headers=headers_fake, timeout=10)
@@ -143,7 +136,6 @@ def get_institutional_data():
         except Exception:
             pass
             
-        # 若該日有抓取到任何資料，即認定為有效交易日，結束迴圈
         if data_found and len(inst_data) > 0:
             break
             
@@ -153,21 +145,18 @@ def analyze_news_sentiment(code):
     pos_words = ['營收', '創高', '雙增', '大單', '受惠', '看好', '成長', '突破', '轉機', '拉貨', '優於預期', '爆發', '買超', '漲停', '利多', '上修']
     neg_words = ['衰退', '減', '降', '不如預期', '保守', '下修', '看壞', '出脫', '跌停', '虧損', '法說會失靈', '利空', '賣超', '走弱']
     url = f"https://tw.stock.yahoo.com/quote/{code}/news"
-    
     try:
         res = requests.get(url, headers=headers_fake, timeout=10)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
             titles = soup.find_all('h3')
             pos_score, neg_score = 0, 0
-            
             for t in titles[:10]:
                 title_text = t.text
                 for word in pos_words:
                     if word in title_text: pos_score += 1
                 for word in neg_words:
                     if word in title_text: neg_score += 1
-            
             if pos_score == 0 and neg_score == 0:
                 return "—", url
             elif pos_score > neg_score:
@@ -273,11 +262,9 @@ def calculate_performance(csv_file):
     try:
         df = pd.read_csv(csv_file)
         if df.empty or '股票代號' not in df.columns: return {}
-        
         df['日期'] = pd.to_datetime(df['日期'])
         today = pd.to_datetime(datetime.now(timezone(timedelta(hours=8))).date())
         df['Days'] = (today - df['日期']).dt.days
-        
         df_target = df[df['Days'] >= 5].copy()
         if df_target.empty: return {}
         
@@ -343,6 +330,7 @@ def calculate_performance(csv_file):
 
 def main():
     try:
+        print("🚀 系統啟動：台股雙策略觀測站自動化掃描")
         tz_tw = timezone(timedelta(hours=8))
         now = datetime.now(tz_tw)
         update_date_str = now.strftime("%Y-%m-%d")
@@ -358,12 +346,21 @@ def main():
 
         is_same_day = previous_data.get("update_date") == update_date_str
 
+        print("📡 正在向證交所請求全台股上市櫃清單...")
         tickers_dict = get_all_tw_tickers()
-        if not tickers_dict: tickers_dict = {'2330.TW': '台積電'}
+        if not tickers_dict: 
+            print("⚠️ 嚴重警告：無法取得 2000 檔名單，伺服器可能被阻擋，僅使用備用名單測試！")
+            tickers_dict = {'2330.TW': '台積電', '2317.TW': '鴻海', '2454.TW': '聯發科'}
+        else:
+            print(f"✅ 成功取得 {len(tickers_dict)} 檔上市櫃股票，準備執行運算。")
+
+        print("📥 正在向證交所與櫃買中心抓取三大法人籌碼資料...")
         inst_data = get_institutional_data()
+        print(f"✅ 成功抓取 {len(inst_data)} 檔法人買賣超資料！")
             
         results_intersection, results_original, results_ai = [], [], []
 
+        print("⚙️ 執行多執行緒技術面與基本面掃描 (這可能需要數分鐘，請耐心等候)...")
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
             futures = {executor.submit(check_stock, t, n, inst_data): t for t, n in tickers_dict.items()}
             for future in concurrent.futures.as_completed(futures):
@@ -373,6 +370,8 @@ def main():
                     if res['is_a']: results_original.append(s_data)
                     if res['is_b']: results_ai.append(s_data)
                     if res['is_a'] and res['is_b']: results_intersection.append(s_data)
+        
+        print("✅ 掃描完畢，正在進行資料彙整與儲存...")
 
         def get_streak(code, list_name):
             for stock in previous_data.get(list_name, []):
@@ -425,9 +424,11 @@ def main():
             f"請至 GitHub Pages 網頁查看最新清單與績效面板。"
         )
         send_telegram_notify(notify_msg)
+        print("🎉 執行成功，所有資料已推播並寫入完畢！")
         
     except Exception as e:
         error_msg = f"\n⚠️ 台股觀測站執行失敗\n錯誤訊息: {str(e)}\n\n詳細 Log:\n{traceback.format_exc()[:500]}"
+        print(error_msg)
         send_telegram_notify(error_msg)
 
 if __name__ == "__main__":
