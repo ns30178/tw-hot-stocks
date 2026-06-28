@@ -36,6 +36,9 @@ jobs:
         pip install yfinance pandas requests lxml html5lib beautifulsoup4 cloudscraper
 
     - name: Run script
+      env:
+        TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+        TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
       run: python find_hot_stocks.py
 
     - name: Commit and push changes
