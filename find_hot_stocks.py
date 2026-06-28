@@ -19,22 +19,30 @@ warnings.filterwarnings("ignore")
 # ==========================================
 # 系統設定區 (Telegram 推播)
 # ==========================================
-TG_BOT_TOKEN = "8954208808:AAFj4n1yqTLYfLcHgGrET4RD1d5EF24Vqbw" 
-TG_CHAT_ID = "8665090039"
+TG_BOT_TOKEN = "請在此填寫" 
+TG_CHAT_ID = "請在此填寫"
 # ==========================================
 
-# 建立突破防火牆專用的 Scraper (對付證交所)
+# 建立突破防火牆專用的 Scraper
 scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
 
-# 一般的 Session (給 Yahoo Finance 使用)
+# 一般的 Session
 global_session = requests.Session()
 retry = Retry(connect=5, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
 adapter = HTTPAdapter(max_retries=retry)
 global_session.mount('http://', adapter)
 global_session.mount('https://', adapter)
 
+headers_fake = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json, text/javascript, */*; q=0.01',
+    'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Connection': 'keep-alive',
+}
+global_session.headers.update(headers_fake)
+
 def send_telegram_notify(msg):
-    if not TG_BOT_TOKEN or TG_BOT_TOKEN == "8954208808:AAFj4n1yqTLYfLcHgGrET4RD1d5EF24Vqbw":
+    if not TG_BOT_TOKEN or TG_BOT_TOKEN == "請在此填寫":
         return
     url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
     data = {"chat_id": TG_CHAT_ID, "text": msg}
@@ -45,7 +53,6 @@ def send_telegram_notify(msg):
 
 def get_all_tw_tickers():
     tickers = {}
-    # 策略 1：使用證交所與櫃買中心 OpenAPI 獲取清單 (最不易被擋)
     try:
         res = scraper.get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", timeout=15)
         if res.status_code == 200:
@@ -64,7 +71,6 @@ def get_all_tw_tickers():
                     tickers[f"{code}.TWO"] = item.get("CompanyName")
     except Exception: pass
 
-    # 策略 2：若 OpenAPI 失敗，切換至 Github 開源靜態清單備援
     if len(tickers) < 1000:
         print("⚠️ OpenAPI 獲取清單失敗，啟用 Github 備援清單...")
         try:
@@ -92,7 +98,6 @@ def get_institutional_data():
         tpex_date = f"{check_time.year - 1911}/{check_time.strftime('%m/%d')}"
         data_found = False
         
-        # 1. 抓取上市 (TWSE)
         try:
             res_open = scraper.get("https://openapi.twse.com.tw/v1/fund/T86_ALL", timeout=10)
             if res_open.status_code == 200 and len(res_open.json()) > 100:
@@ -108,7 +113,6 @@ def get_institutional_data():
                     except ValueError: pass
                 data_found = True
             else:
-                # 使用 RWD 新版網址進行備援
                 url_twse = f"https://www.twse.com.tw/rwd/zh/fund/T86?date={twse_date}&selectType=ALL&response=json"
                 res_twse = scraper.get(url_twse, timeout=10)
                 if res_twse.status_code == 200:
@@ -124,7 +128,6 @@ def get_institutional_data():
                         data_found = True
         except Exception: pass
 
-        # 2. 抓取上櫃 (TPEX)
         try:
             url_tpex = f"https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=json&d={tpex_date}"
             res_tpex = scraper.get(url_tpex, timeout=10)
@@ -176,7 +179,9 @@ def analyze_news_sentiment(code):
 
 def check_stock(ticker, name, inst_data):
     try:
-        time.sleep(random.uniform(0.1, 0.4)) 
+        # 【關鍵降速點】：拉長隨機等待時間至 1.0~2.5 秒，避免觸發 Yahoo Finance 429 封鎖
+        time.sleep(random.uniform(1.0, 2.5)) 
+        
         data = yf.download(ticker, period="1y", auto_adjust=True, progress=False, session=global_session)
         if len(data) < 200: return None
         if isinstance(data.columns, pd.MultiIndex): data.columns = data.columns.droplevel(1)
@@ -366,8 +371,9 @@ def main():
             
         results_intersection, results_original, results_ai = [], [], []
 
-        print("⚙️ 執行多執行緒技術面與基本面掃描 (這可能需要數分鐘，請耐心等候)...")
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        print("⚙️ 執行多執行緒技術面與基本面掃描 (已啟動降速防封鎖機制，請耐心等候)...")
+        # 【關鍵降速點】：將同時執行的任務從 3 降為 2，減輕 Yahoo 伺服器壓力
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             futures = {executor.submit(check_stock, t, n, inst_data): t for t, n in tickers_dict.items()}
             for future in concurrent.futures.as_completed(futures):
                 res = future.result()
