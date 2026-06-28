@@ -19,8 +19,8 @@ warnings.filterwarnings("ignore")
 # ==========================================
 # 系統設定區 (Telegram 推播)
 # ==========================================
-TG_BOT_TOKEN = "8954208808:AAFj4n1yqTLYfLcHgGrET4RD1d5EF24Vqbw" 
-TG_CHAT_ID = "8665090039"
+TG_BOT_TOKEN = "https://api.telegram.org/bot<你的Token>/sendMessage?chat_id=<你的ChatID>&text=手動測試連線" 
+TG_CHAT_ID = "https://api.telegram.org/bot<你的Token>/sendMessage?chat_id=<你的ChatID>&text=手動測試連線"
 # ==========================================
 
 # 建立突破防火牆專用的 Scraper
@@ -42,7 +42,7 @@ headers_fake = {
 global_session.headers.update(headers_fake)
 
 def send_telegram_notify(msg):
-    if not TG_BOT_TOKEN or TG_BOT_TOKEN == "8954208808:AAFj4n1yqTLYfLcHgGrET4RD1d5EF24Vqbw":
+    if not TG_BOT_TOKEN or TG_BOT_TOKEN == "https://api.telegram.org/bot<你的Token>/sendMessage?chat_id=<你的ChatID>&text=手動測試連線":
         return
     url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
     data = {"chat_id": TG_CHAT_ID, "text": msg}
