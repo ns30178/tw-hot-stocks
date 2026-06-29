@@ -60,7 +60,7 @@
             { name: '漲幅%', class: '', key: '單日漲跌幅(%)' },
             { name: '乖離率%', class: '', key: '乖離率(%)' }, 
             { name: '營收YoY', class: '', key: '營收YoY(%)' }, 
-            { name: '法人(張)', class: '', key: '外資買賣(張)' },
+            { name: '籌碼', class: 'text-center', key: '外資買賣(張)' },
             { name: '消息面', class: '', key: '情緒分析' }
         ];
 
@@ -109,10 +109,6 @@
                     const upDownClass = isLimitUp ? 'text-white' : (s['單日漲跌幅(%)'] > 0 ? 'text-red-500' : 'text-green-500');
                     const symbolClick = `onclick="openModal('${s['交易所']}', '${s['股票代號']}')"`;
                     
-                    const fiVal = s['外資買賣(張)'] || 0;
-                    const itVal = s['投信買賣(張)'] || 0;
-                    const fiClass = fiVal > 0 ? 'text-red-500' : (fiVal < 0 ? 'text-green-500' : 'text-gray-600');
-                    const itClass = itVal > 0 ? 'text-red-500' : (itVal < 0 ? 'text-green-500' : 'text-gray-600');
                     const brokerLink = `https://www.wantgoo.com/stock/${s['股票代號']}/major-investors/branch-buysell`;
                     
                     let sentimentText = s['情緒分析'] || '—';
@@ -131,10 +127,9 @@
                         <td class="p-2 font-bold ${upDownClass}">${s['單日漲跌幅(%)'] ? (s['單日漲跌幅(%)'] > 0 ? '+' : '') + s['單日漲跌幅(%)'] : '-'}</td>
                         <td class="p-2">${s['乖離率(%)'] !== null ? s['乖離率(%)'] : '-'}</td>
                         <td class="p-2">${s['營收YoY(%)'] !== null ? s['營收YoY(%)'] : '-'}</td>
-                        <td class="p-2 text-sm"> 
-                            <a href="${brokerLink}" target="_blank" class="hover:underline hover:text-blue-600 block" title="點擊看主力/分點">
-                                外: <span class="${fiClass}">${fiVal}</span><br>
-                                投: <span class="${itClass}">${itVal}</span>
+                        <td class="p-2 text-center"> 
+                            <a href="${brokerLink}" target="_blank" class="inline-block bg-gray-200 hover:bg-blue-600 hover:text-white text-gray-700 px-2 py-1 rounded text-xs font-bold transition-colors" title="前往玩股網查看主力分點">
+                                籌碼分析
                             </a>
                         </td>
                         <td class="p-2">
