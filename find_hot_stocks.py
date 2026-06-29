@@ -177,9 +177,35 @@ def analyze_news_sentiment(code):
         return "—", url
     return "—", url
 
+def get_concept_and_heat(code, data_df):
+    concept = "—"
+    try:
+        url = f"https://tw.stock.yahoo.com/quote/{code}"
+        res = scraper.get(url, timeout=5)
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, 'html.parser')
+            tags = soup.find_all('a', href=lambda href: href and '/concept/' in href)
+            if tags:
+                unique_tags = list(dict.fromkeys([t.text.strip() for t in tags]))
+                concept = "、".join(unique_tags[:3])
+    except Exception:
+        pass
+
+    heat = "—"
+    try:
+        if len(data_df) >= 5:
+            latest_vol = data_df['Volume'].iloc[-1]
+            vma5 = data_df['Volume'].rolling(window=5).mean().iloc[-1]
+            if vma5 > 0:
+                heat_val = (latest_vol / vma5) * 100
+                heat = f"{heat_val:.1f}%"
+    except Exception:
+        pass
+
+    return concept, heat
+
 def check_stock(ticker, name, inst_data):
     try:
-        # 【關鍵降速點】：拉長隨機等待時間至 1.0~2.5 秒，避免觸發 Yahoo Finance 429 封鎖
         time.sleep(random.uniform(1.0, 2.5)) 
         
         data = yf.download(ticker, period="1y", auto_adjust=True, progress=False, session=global_session)
@@ -248,11 +274,15 @@ def check_stock(ticker, name, inst_data):
 
         if is_strategy_a or is_strategy_b:
             exchange = "TWSE" if ticker.endswith(".TW") else "TPEX"
+            concept, heat = get_concept_and_heat(code_only, data)
+            
             return {
                 'stock_data': {
                     '交易所': exchange,
                     '股票代號': code_only,
                     '股票名稱': name,
+                    '概念類股': concept,
+                    '個股熱度': heat,
                     '現價': round(float(latest['Close']), 2),
                     '單日漲跌幅(%)': round(float(daily_return), 2),
                     '乖離率(%)': round(float(bias_20), 2),
@@ -372,7 +402,6 @@ def main():
         results_intersection, results_original, results_ai = [], [], []
 
         print("⚙️ 執行多執行緒技術面與基本面掃描 (已啟動降速防封鎖機制，請耐心等候)...")
-        # 【關鍵降速點】：將同時執行的任務從 3 降為 2，減輕 Yahoo 伺服器壓力
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             futures = {executor.submit(check_stock, t, n, inst_data): t for t, n in tickers_dict.items()}
             for future in concurrent.futures.as_completed(futures):
