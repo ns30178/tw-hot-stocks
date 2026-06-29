@@ -178,24 +178,25 @@ def analyze_news_sentiment(code):
     return "—", url
 
 def get_concept_and_heat(code, data_df):
-    concept = "—"
+    concept = "無概念標籤"
     try:
         url = f"https://tw.stock.yahoo.com/quote/{code}"
-        res = scraper.get(url, timeout=8)
+        res = scraper.get(url, timeout=10)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
-            tags = soup.find_all('a', href=True)
-            concepts = [t.text.strip() for t in tags if '/concept/' in t['href']]
-            if concepts:
+            tags = soup.select('a[href*="/concept/"]')
+            if tags:
+                concepts = [t.text.strip() for t in tags]
                 unique_tags = list(dict.fromkeys(concepts))
-                concept = "、".join(unique_tags[:3])
+                if unique_tags:
+                    concept = "、".join(unique_tags[:3])
     except Exception:
         pass
 
-    heat = "—"
+    heat = "0.0%"
     try:
-       # 確保 data_df 為 DataFrame 且 Volume 欄位存在 
-        if data_df is not None and 'Volume' in data_df.columns and len(data_df) >= 5:
+        # 確保 data_df 為 DataFrame 且 Volume 欄位存在 
+        if data_df is not None and not data_df.empty and 'Volume' in data_df.columns and len(data_df) >= 5:
             latest_vol = float(data_df['Volume'].iloc[-1])
             vma5 = float(data_df['Volume'].rolling(window=5).mean().iloc[-1])
             if vma5 > 0:
@@ -379,15 +380,25 @@ def main():
         now = datetime.now(tz_tw)
         update_date_str = now.strftime("%Y-%m-%d")
 
+        # 【修正 1】極其嚴謹的 JSON 防重複覆蓋邏輯
         previous_data = {"update_date": "無", "original_strategy": [], "ai_strategy": [], "intersection": []}
+        old_json = {}
         if os.path.exists('daily_hot_stocks.json') and os.path.getsize('daily_hot_stocks.json') > 0:
             try:
                 with open('daily_hot_stocks.json', 'r', encoding='utf-8') as f:
                     old_json = json.load(f)
-                    previous_data = old_json.get("latest_data", previous_data)
             except Exception: pass
 
-        is_same_day = previous_data.get("update_date") == update_date_str
+        latest_in_file = old_json.get("latest_data", {})
+        is_same_day = latest_in_file.get("update_date") == update_date_str
+
+        if is_same_day:
+            # 如果今天已經跑過，鎖死 previous_data 不被蓋掉
+            previous_data = old_json.get("previous_data", previous_data)
+        else:
+            # 若是新的一天，昨天的資料順利退位給 previous_data
+            if latest_in_file.get("update_date"):
+                previous_data = latest_in_file
 
         print("📡 正在向證交所請求全台股上市櫃清單 (套用 Cloudscraper 破防模組)...")
         tickers_dict = get_all_tw_tickers()
@@ -435,11 +446,21 @@ def main():
         for s in results_original: s_copy = s.copy(); s_copy['策略'] = '飆股策略'; all_results.append(s_copy)
         for s in results_ai: s_copy = s.copy(); s_copy['策略'] = 'AI選股策略'; all_results.append(s_copy)
         for s in results_intersection: s_copy = s.copy(); s_copy['策略'] = '核心交集'; all_results.append(s_copy)
+        
+        # 【修正 2】嚴謹的 CSV 去重更新 (Upsert) 邏輯
         if all_results:
             df_new = pd.DataFrame(all_results)
             df_new.insert(0, '日期', update_date_str)
-            file_exists = os.path.isfile(csv_file) and os.path.getsize(csv_file) > 0
-            df_new.to_csv(csv_file, mode='a', index=False, encoding='utf-8-sig', header=not file_exists)
+            if os.path.exists(csv_file) and os.path.getsize(csv_file) > 0:
+                df_existing = pd.read_csv(csv_file, encoding='utf-8-sig')
+                # 刪除所有與今日日期重複的歷史數據
+                df_existing = df_existing[df_existing['日期'] != update_date_str]
+                # 將舊數據與新數據合併
+                df_final = pd.concat([df_existing, df_new], ignore_index=True)
+            else:
+                df_final = df_new
+            # 完全覆蓋舊檔，確保資料絕對唯一且乾淨
+            df_final.to_csv(csv_file, index=False, encoding='utf-8-sig')
 
         perf_stats = calculate_performance(csv_file)
 
