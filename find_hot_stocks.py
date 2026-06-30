@@ -9,6 +9,7 @@ import json
 import os
 import traceback
 import cloudscraper
+import io
 from datetime import datetime, timezone, timedelta
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -195,7 +196,6 @@ def get_concept_and_heat(code, data_df):
 
     heat = "0.0%"
     try:
-        # 確保 data_df 為 DataFrame 且 Volume 欄位存在 
         if data_df is not None and not data_df.empty and 'Volume' in data_df.columns and len(data_df) >= 5:
             latest_vol = float(data_df['Volume'].iloc[-1])
             vma5 = float(data_df['Volume'].rolling(window=5).mean().iloc[-1])
@@ -380,7 +380,6 @@ def main():
         now = datetime.now(tz_tw)
         update_date_str = now.strftime("%Y-%m-%d")
 
-        # 【修正 1】極其嚴謹的 JSON 防重複覆蓋邏輯
         previous_data = {"update_date": "無", "original_strategy": [], "ai_strategy": [], "intersection": []}
         old_json = {}
         if os.path.exists('daily_hot_stocks.json') and os.path.getsize('daily_hot_stocks.json') > 0:
@@ -393,10 +392,8 @@ def main():
         is_same_day = latest_in_file.get("update_date") == update_date_str
 
         if is_same_day:
-            # 如果今天已經跑過，鎖死 previous_data 不被蓋掉
             previous_data = old_json.get("previous_data", previous_data)
         else:
-            # 若是新的一天，昨天的資料順利退位給 previous_data
             if latest_in_file.get("update_date"):
                 previous_data = latest_in_file
 
@@ -447,19 +444,48 @@ def main():
         for s in results_ai: s_copy = s.copy(); s_copy['策略'] = 'AI選股策略'; all_results.append(s_copy)
         for s in results_intersection: s_copy = s.copy(); s_copy['策略'] = '核心交集'; all_results.append(s_copy)
         
-        # 【修正 2】嚴謹的 CSV 去重更新 (Upsert) 邏輯
+        # 【核心修正】極度強健的 CSV 自動修復與寫入機制
         if all_results:
             df_new = pd.DataFrame(all_results)
             df_new.insert(0, '日期', update_date_str)
+            
             if os.path.exists(csv_file) and os.path.getsize(csv_file) > 0:
-                df_existing = pd.read_csv(csv_file, encoding='utf-8-sig')
-                # 刪除所有與今日日期重複的歷史數據
-                df_existing = df_existing[df_existing['日期'] != update_date_str]
-                # 將舊數據與新數據合併
-                df_final = pd.concat([df_existing, df_new], ignore_index=True)
+                try:
+                    # 讀取純文字，手動處理 14 欄與 16 欄的衝突
+                    with open(csv_file, 'r', encoding='utf-8-sig') as f:
+                        lines = f.readlines()
+                    
+                    if lines:
+                        header = lines[0].strip("\n\r").split(',')
+                        # 如果舊表頭缺少新功能欄位，立刻幫它補上
+                        if '概念類股' not in header:
+                            lines[0] = lines[0].strip("\n\r") + ",概念類股,個股熱度\n"
+                        
+                        expected_cols = len(lines[0].split(','))
+                        
+                        # 檢查並補齊下方所有舊資料的空缺欄位
+                        for i in range(1, len(lines)):
+                            cols = lines[i].strip("\n\r").split(',')
+                            if len(cols) < expected_cols:
+                                # 舊資料缺少兩欄，自動補上 '—'
+                                lines[i] = lines[i].strip("\n\r") + ",—,—\n"
+                                
+                        # 使用修復後的乾淨字串重新餵給 Pandas
+                        df_existing = pd.read_csv(io.StringIO("".join(lines)))
+                        
+                        # 過濾掉今日的重複資料，確保資料去重
+                        if '日期' in df_existing.columns:
+                            df_existing = df_existing[df_existing['日期'] != update_date_str]
+                            
+                        df_final = pd.concat([df_existing, df_new], ignore_index=True)
+                    else:
+                        df_final = df_new
+                except Exception as e:
+                    print(f"⚠️ CSV 自動修復讀取失敗: {e}")
+                    df_final = df_new
             else:
                 df_final = df_new
-            # 完全覆蓋舊檔，確保資料絕對唯一且乾淨
+                
             df_final.to_csv(csv_file, index=False, encoding='utf-8-sig')
 
         perf_stats = calculate_performance(csv_file)
