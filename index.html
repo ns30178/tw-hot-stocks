@@ -53,7 +53,7 @@
         const COLS = [
             { name: '代號', class: '', key: '股票代號' },
             { name: '名稱', class: '', key: '股票名稱' },
-            { name: '概念類股', class: '', key: '概念類股' },
+            { name: '產業分類', class: '', key: '產業分類' },
             { name: '熱度', class: '', key: '個股熱度' },
             { name: '天數', class: '', key: '進榜天數' },
             { name: '現價', class: '', key: '現價' },
@@ -120,7 +120,7 @@
                     <tr class="border-b hover:bg-gray-50 transition-colors">
                         <td class="p-2 cursor-pointer hover:underline ${limitUpClass}" ${symbolClick}>${s['股票代號'] || '-'}</td>
                         <td class="p-2 cursor-pointer hover:underline font-bold ${limitUpClass}" ${symbolClick}>${s['股票名稱'] || '-'}</td>
-                        <td class="p-2 text-xs text-gray-500 truncate max-w-[120px]" title="${s['概念類股'] || '—'}">${s['概念類股'] || '—'}</td>
+                        <td class="p-2 text-xs text-gray-500 truncate max-w-[120px]" title="${s['產業分類'] || '—'}">${s['產業分類'] || '—'}</td>
                         <td class="p-2 font-bold text-orange-500">${s['個股熱度'] || '—'}</td>
                         <td class="p-2 text-center font-bold text-blue-600">${s['進榜天數'] || 1}</td>
                         <td class="p-2 font-bold">${s['現價'] || '-'}</td>
