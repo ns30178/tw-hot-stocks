@@ -443,6 +443,21 @@ def main():
         for s in results_ai: s_copy = s.copy(); s_copy['策略'] = 'AI選股策略'; all_results.append(s_copy)
         for s in results_intersection: s_copy = s.copy(); s_copy['策略'] = '核心交集'; all_results.append(s_copy)
         
+        # ==========================================
+        # 【新增 UX 保護機制】若無股票進榜，直接凍結網頁不動
+        # ==========================================
+        if not all_results:
+            print("⚠️ 本次掃描無標的進榜，啟動版面保護機制，放棄覆蓋資料。")
+            notify_msg = (
+                f"\n📊 台股雙策略觀測站 (防呆保護)\n"
+                f"📅 日期：{update_date_str}\n\n"
+                f"⚠️ 目前無標的進榜 (可能尚未收盤或無動能股)。\n"
+                f"🔒 網頁資料與歷史紀錄已凍結，維持前次版面不動。"
+            )
+            send_telegram_notify(notify_msg)
+            return  # 提前結束 main 函數，絕對不往下寫入 JSON 與 CSV
+        # ==========================================
+        
         if all_results:
             df_new = pd.DataFrame(all_results)
             df_new.insert(0, '日期', update_date_str)
