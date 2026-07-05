@@ -24,10 +24,8 @@ TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN", "")
 TG_CHAT_ID = os.environ.get("TG_CHAT_ID", "")
 # ==========================================
 
-# 建立突破防火牆專用的 Scraper
 scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
 
-# 一般的 Session
 global_session = requests.Session()
 retry = Retry(connect=5, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
 adapter = HTTPAdapter(max_retries=retry)
@@ -83,22 +81,18 @@ def get_all_tw_tickers():
                         suffix = ".TW" if info['market'] == '上市' else ".TWO"
                         tickers[f"{code}{suffix}"] = info['name']
         except Exception: pass
-
     return tickers
 
 def get_institutional_data():
     inst_data = {}
     tw_time = datetime.now(timezone(timedelta(hours=8)))
-    
     for i in range(5):
         check_time = tw_time - timedelta(days=i)
         if check_time.weekday() >= 5:
             continue
-            
         twse_date = check_time.strftime("%Y%m%d")
         tpex_date = f"{check_time.year - 1911}/{check_time.strftime('%m/%d')}"
         data_found = False
-        
         try:
             res_open = scraper.get("https://openapi.twse.com.tw/v1/fund/T86_ALL", timeout=10)
             if res_open.status_code == 200 and len(res_open.json()) > 100:
@@ -146,10 +140,8 @@ def get_institutional_data():
                             except ValueError: pass
                     data_found = True
         except Exception: pass
-            
         if data_found and len(inst_data) > 0:
             break
-            
     return inst_data
 
 def analyze_news_sentiment(code):
@@ -168,14 +160,10 @@ def analyze_news_sentiment(code):
                     if word in title_text: pos_score += 1
                 for word in neg_words:
                     if word in title_text: neg_score += 1
-            if pos_score == 0 and neg_score == 0:
-                return "—", url
-            elif pos_score > neg_score:
-                return f"利多 ({pos_score})", url
-            else:
-                return f"利空 ({neg_score})", url
-    except Exception:
-        return "—", url
+            if pos_score == 0 and neg_score == 0: return "—", url
+            elif pos_score > neg_score: return f"利多 ({pos_score})", url
+            else: return f"利空 ({neg_score})", url
+    except Exception: return "—", url
     return "—", url
 
 def get_industry_and_heat(code, data_df):
@@ -185,31 +173,24 @@ def get_industry_and_heat(code, data_df):
         res = scraper.get(url, timeout=10)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
-            # 尋找 Yahoo 財經中帶有產業分類 ID 的連結
             tags = soup.select('a[href*="/class-quote?sectorId="]')
-            if tags:
-                industry = tags[0].text.strip()
-    except Exception:
-        pass
+            if tags: industry = tags[0].text.strip()
+    except Exception: pass
 
     heat = "0.0%"
     try:
-        # 確保 data_df 為 DataFrame 且 Volume 欄位存在 
         if data_df is not None and not data_df.empty and 'Volume' in data_df.columns and len(data_df) >= 5:
             latest_vol = float(data_df['Volume'].iloc[-1])
             vma5 = float(data_df['Volume'].rolling(window=5).mean().iloc[-1])
             if vma5 > 0:
                 heat_val = (latest_vol / vma5) * 100
                 heat = f"{heat_val:.1f}%"
-    except Exception:
-        pass
-
+    except Exception: pass
     return industry, heat
 
 def check_stock(ticker, name, inst_data):
     try:
-        time.sleep(random.uniform(1.0, 2.5)) 
-        
+        time.sleep(random.uniform(1.0, 2.5))
         data = yf.download(ticker, period="1y", auto_adjust=True, progress=False, session=global_session)
         if len(data) < 200: return None
         if isinstance(data.columns, pd.MultiIndex): data.columns = data.columns.droplevel(1)
@@ -218,7 +199,6 @@ def check_stock(ticker, name, inst_data):
         data['MA20'] = data['Close'].rolling(window=20).mean()
         data['MA60'] = data['Close'].rolling(window=60).mean()
         data['VMA5'] = data['Volume'].rolling(window=5).mean()
-        
         data['TR'] = pd.concat([
             data['High'] - data['Low'],
             (data['High'] - data['Close'].shift(1)).abs(),
@@ -228,7 +208,6 @@ def check_stock(ticker, name, inst_data):
 
         latest = data.iloc[-1]
         prev = data.iloc[-2] if len(data) > 1 else latest
-        
         daily_return = ((latest['Close'] - prev['Close']) / prev['Close']) * 100
         volume_lots = latest['Volume'] / 1000
 
@@ -247,26 +226,20 @@ def check_stock(ticker, name, inst_data):
             body_ratio = (latest['Close'] - latest['Open']) / amplitude
             upper_shadow_ratio = (latest['High'] - latest['Close']) / amplitude
             cond_b_kline = (latest['Close'] > latest['Open']) and (body_ratio > 0.5) and (upper_shadow_ratio < 0.3) and (latest['High'] > latest['Low'])
-        else:
-            cond_b_kline = False
+        else: cond_b_kline = False
 
         tech_b_pass = cond_b_price and cond_b_liquidity and cond_b_ma_convergence and cond_b_vol_amp and cond_b_atr_expand and cond_b_kline
 
-        if not (tech_a_pass or tech_b_pass):
-            return None
+        if not (tech_a_pass or tech_b_pass): return None
 
         code_only = ticker.split('.')[0]
         inst = inst_data.get(code_only, {"FI": 0, "IT": 0})
-        
-        if code_only in inst_data:
-            if (inst["FI"] + inst["IT"]) < 0:
-                return None
+        if code_only in inst_data and (inst["FI"] + inst["IT"]) < 0: return None
 
         stock = yf.Ticker(ticker)
         info = stock.info
         capital = (info.get('sharesOutstanding') or 0) * 10
         book_value = info.get('bookValue') or 0
-        
         rev_growth = info.get('revenueGrowth')
         rev_growth_pct = round(rev_growth * 100, 2) if rev_growth is not None else None
         bias_20 = ((latest['Close'] - latest['MA20']) / latest['MA20']) * 100
@@ -277,32 +250,20 @@ def check_stock(ticker, name, inst_data):
         if is_strategy_a or is_strategy_b:
             exchange = "TWSE" if ticker.endswith(".TW") else "TPEX"
             industry, heat = get_industry_and_heat(code_only, data)
-            
             return {
                 'stock_data': {
-                    '交易所': exchange,
-                    '股票代號': code_only,
-                    '股票名稱': name,
-                    '產業分類': industry,
-                    '個股熱度': heat,
-                    '現價': round(float(latest['Close']), 2),
-                    '單日漲跌幅(%)': round(float(daily_return), 2),
-                    '乖離率(%)': round(float(bias_20), 2),
-                    '營收YoY(%)': rev_growth_pct,
-                    '外資買賣(張)': inst["FI"],
-                    '投信買賣(張)': inst["IT"],
-                    '進榜天數': 1
+                    '交易所': exchange, '股票代號': code_only, '股票名稱': name,
+                    '產業分類': industry, '個股熱度': heat, '現價': round(float(latest['Close']), 2),
+                    '單日漲跌幅(%)': round(float(daily_return), 2), '乖離率(%)': round(float(bias_20), 2),
+                    '營收YoY(%)': rev_growth_pct, '外資買賣(張)': inst["FI"], '投信買賣(張)': inst["IT"], '進榜天數': 1
                 },
-                'is_a': is_strategy_a,
-                'is_b': is_strategy_b
+                'is_a': is_strategy_a, 'is_b': is_strategy_b
             }
-    except Exception:
-        pass
+    except Exception: pass
     return None
 
 def calculate_performance(csv_file):
-    if not os.path.exists(csv_file) or os.path.getsize(csv_file) == 0:
-        return {}
+    if not os.path.exists(csv_file) or os.path.getsize(csv_file) == 0: return {}
     try:
         df = pd.read_csv(csv_file)
         if df.empty or '股票代號' not in df.columns: return {}
@@ -319,22 +280,18 @@ def calculate_performance(csv_file):
             
         tickers_to_dl = list(ticker_map.values())
         curr_data = yf.download(tickers_to_dl, period="5d", auto_adjust=True, progress=False)
-        
         latest_prices = {}
         if len(tickers_to_dl) == 1:
             latest_prices[tickers_to_dl[0]] = float(curr_data['Close'].iloc[-1])
         else:
             for t in tickers_to_dl:
-                try:
-                    latest_prices[t] = float(curr_data['Close'][t].dropna().iloc[-1])
-                except:
-                    pass
+                try: latest_prices[t] = float(curr_data['Close'][t].dropna().iloc[-1])
+                except: pass
                     
         def get_ret(row):
             t_full = ticker_map.get(str(row['股票代號']))
             lp = latest_prices.get(t_full)
-            if lp and row.get('現價', 0) > 0:
-                return (lp - row['現價']) / row['現價'] * 100
+            if lp and row.get('現價', 0) > 0: return (lp - row['現價']) / row['現價'] * 100
             return None
             
         df_target['Return'] = df_target.apply(get_ret, axis=1)
@@ -345,7 +302,6 @@ def calculate_performance(csv_file):
             elif 10 <= d <= 19: return "10日"
             elif d >= 20: return "20日"
             return None
-            
         df_target['Period'] = df_target['Days'].apply(get_period)
         df_target = df_target.dropna(subset=['Period'])
         
@@ -360,57 +316,54 @@ def calculate_performance(csv_file):
                     avg_ret = p_df['Return'].mean()
                     best_row = p_df.loc[p_df['Return'].idxmax()]
                     best_str = f"{best_row['股票代號']}(+{best_row['Return']:.1f}%)"
-                    stats[strategy][period] = {
-                        "count": len(p_df),
-                        "win_rate": round(win_rate, 1),
-                        "avg_return": round(avg_ret, 2),
-                        "best_stock": best_str
-                    }
+                    stats[strategy][period] = {"count": len(p_df), "win_rate": round(win_rate, 1), "avg_return": round(avg_ret, 2), "best_stock": best_str}
                 else:
                     stats[strategy][period] = {"count": 0, "win_rate": 0, "avg_return": 0, "best_stock": "—"}
         return stats
-    except Exception:
-        return {}
+    except Exception: return {}
 
 def main():
     try:
         print("🚀 系統啟動：台股雙策略觀測站自動化掃描")
         tz_tw = timezone(timedelta(hours=8))
         now = datetime.now(tz_tw)
-        update_date_str = now.strftime("%Y-%m-%d")
+        
+        # ==========================================
+        # 【全時段閃電退場防線】平日非盤後時段、週末假日，一秒攔截以節省時數
+        # ==========================================
+        is_weekend = now.weekday() >= 5
+        is_wrong_time = now.hour < 17
+        is_manual = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+        
+        if (is_weekend or is_wrong_time) and not is_manual:
+            print(f"💤 偵測到當前時間為台灣 {now.strftime('%Y-%m-%d %H:%M:%S')} (非盤後更新時段)")
+            print("🔒 啟動全時段閃電安全退場機制，一秒終止程式，成功守護 GitHub 運算時數！")
+            return
+        # ==========================================
 
+        update_date_str = now.strftime("%Y-%m-%d")
         previous_data = {"update_date": "無", "original_strategy": [], "ai_strategy": [], "intersection": []}
         old_json = {}
         if os.path.exists('daily_hot_stocks.json') and os.path.getsize('daily_hot_stocks.json') > 0:
             try:
-                with open('daily_hot_stocks.json', 'r', encoding='utf-8') as f:
-                    old_json = json.load(f)
+                with open('daily_hot_stocks.json', 'r', encoding='utf-8') as f: old_json = json.load(f)
             except Exception: pass
 
         latest_in_file = old_json.get("latest_data", {})
         is_same_day = latest_in_file.get("update_date") == update_date_str
-
-        if is_same_day:
-            previous_data = old_json.get("previous_data", previous_data)
+        if is_same_day: previous_data = old_json.get("previous_data", previous_data)
         else:
-            if latest_in_file.get("update_date"):
-                previous_data = latest_in_file
+            if latest_in_file.get("update_date"): previous_data = latest_in_file
 
-        print("📡 正在向證交所請求全台股上市櫃清單 (套用 Cloudscraper 破防模組)...")
+        print("📡 正在向證交所請求全台股上市櫃清單...")
         tickers_dict = get_all_tw_tickers()
-        if not tickers_dict: 
-            print("⚠️ 嚴重警告：所有清單管道皆失效，僅使用備用名單測試！")
-            tickers_dict = {'2330.TW': '台積電', '2317.TW': '鴻海', '2454.TW': '聯發科'}
-        else:
-            print(f"✅ 成功取得 {len(tickers_dict)} 檔上市櫃股票，準備執行運算。")
-
-        print("📥 正在向證交所與櫃買中心抓取三大法人籌碼資料...")
+        if not tickers_dict: tickers_dict = {'2330.TW': '台積電', '2317.TW': '鴻海', '2454.TW': '聯發科'}
+        
+        print("📥 正在抓取三大法人籌碼資料...")
         inst_data = get_institutional_data()
-        print(f"✅ 成功抓取 {len(inst_data)} 檔法人買賣超資料！")
             
         results_intersection, results_original, results_ai = [], [], []
-
-        print("⚙️ 執行多執行緒技術面與基本面掃描 (已啟動降速防封鎖機制，請耐心等候)...")
+        print("⚙️ 執行多執行緒篩選策略...")
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             futures = {executor.submit(check_stock, t, n, inst_data): t for t, n in tickers_dict.items()}
             for future in concurrent.futures.as_completed(futures):
@@ -421,8 +374,7 @@ def main():
                     if res['is_b']: results_ai.append(s_data)
                     if res['is_a'] and res['is_b']: results_intersection.append(s_data)
         
-        print("✅ 掃描完畢，正在進行資料彙整與儲存...")
-
+        print("✅ 篩選完畢，計算進榜連續天數與新聞情緒...")
         def get_streak(code, list_name):
             for stock in previous_data.get(list_name, []):
                 if stock.get('股票代號') == code:
@@ -444,7 +396,7 @@ def main():
         for s in results_intersection: s_copy = s.copy(); s_copy['策略'] = '核心交集'; all_results.append(s_copy)
         
         # ==========================================
-        # 【新增 UX 保護機制】若無股票進榜，直接凍結網頁不動
+        # 【UX 凍結機制】若盤後掃描無股票進榜，凍結網頁與 CSV
         # ==========================================
         if not all_results:
             print("⚠️ 本次掃描無標的進榜，啟動版面保護機制，放棄覆蓋資料。")
@@ -455,51 +407,34 @@ def main():
                 f"🔒 網頁資料與歷史紀錄已凍結，維持前次版面不動。"
             )
             send_telegram_notify(notify_msg)
-            return  # 提前結束 main 函數，絕對不往下寫入 JSON 與 CSV
+            return
         # ==========================================
-        
+
         if all_results:
             df_new = pd.DataFrame(all_results)
             df_new.insert(0, '日期', update_date_str)
-            
             if os.path.exists(csv_file) and os.path.getsize(csv_file) > 0:
                 try:
-                    with open(csv_file, 'r', encoding='utf-8-sig') as f:
-                        lines = f.readlines()
-                    
+                    with open(csv_file, 'r', encoding='utf-8-sig') as f: lines = f.readlines()
                     if lines:
-                        # 替換舊表頭中的「概念類股」為「產業分類」
                         lines[0] = lines[0].replace('概念類股', '產業分類')
                         header = lines[0].strip("\n\r").split(',')
-                        
-                        if '產業分類' not in header:
-                            lines[0] = lines[0].strip("\n\r") + ",產業分類,個股熱度\n"
-                        
+                        if '產業分類' not in header: lines[0] = lines[0].strip("\n\r") + ",產業分類,個股熱度\n"
                         expected_cols = len(lines[0].split(','))
-                        
                         for i in range(1, len(lines)):
                             cols = lines[i].strip("\n\r").split(',')
-                            if len(cols) < expected_cols:
-                                lines[i] = lines[i].strip("\n\r") + ",—,—\n"
-                                
+                            if len(cols) < expected_cols: lines[i] = lines[i].strip("\n\r") + ",—,—\n"
                         df_existing = pd.read_csv(io.StringIO("".join(lines)))
-                        
-                        if '日期' in df_existing.columns:
-                            df_existing = df_existing[df_existing['日期'] != update_date_str]
-                            
+                        if '日期' in df_existing.columns: df_existing = df_existing[df_existing['日期'] != update_date_str]
                         df_final = pd.concat([df_existing, df_new], ignore_index=True)
-                    else:
-                        df_final = df_new
+                    else: df_final = df_new
                 except Exception as e:
                     print(f"⚠️ CSV 自動修復讀取失敗: {e}")
                     df_final = df_new
-            else:
-                df_final = df_new
-                
+            else: df_final = df_new
             df_final.to_csv(csv_file, index=False, encoding='utf-8-sig')
 
         perf_stats = calculate_performance(csv_file)
-
         output_data = {
             "update_time": now.strftime("%Y-%m-%d %H:%M:%S"),
             "latest_data": {
@@ -521,7 +456,7 @@ def main():
             f"🔥 核心交集：{len(results_intersection)} 檔\n"
             f"📈 飆股策略：{len(results_original)} 檔\n"
             f"🤖 AI 選股：{len(results_ai)} 檔\n\n"
-            f"請至 GitHub Pages 網頁查看最新清單與績效面板。"
+            f"請至 GitHub Pages 網頁查看最新清單。"
         )
         send_telegram_notify(notify_msg)
         print("🎉 執行成功，所有資料已推播並寫入完畢！")
