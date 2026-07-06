@@ -267,7 +267,11 @@ def calculate_performance(csv_file):
     try:
         df = pd.read_csv(csv_file)
         if df.empty or '股票代號' not in df.columns: return {}
-        df['日期'] = pd.to_datetime(df['日期'])
+        
+        df['日期'] = pd.to_datetime(df['日期'], errors='coerce')
+        df = df.dropna(subset=['日期'])
+        df['現價'] = pd.to_numeric(df['現價'], errors='coerce')
+        
         today = pd.to_datetime(datetime.now(timezone(timedelta(hours=8))).date())
         df['Days'] = (today - df['日期']).dt.days
         df_target = df[df['Days'] >= 5].copy()
@@ -275,23 +279,30 @@ def calculate_performance(csv_file):
         
         ticker_map = {}
         for _, row in df_target.drop_duplicates('股票代號').iterrows():
+            code_str = str(row['股票代號']).replace('.0', '')
             suffix = ".TW" if row.get('交易所') == "TWSE" else ".TWO"
-            ticker_map[str(row['股票代號'])] = f"{row['股票代號']}{suffix}"
+            ticker_map[code_str] = f"{code_str}{suffix}"
             
         tickers_to_dl = list(ticker_map.values())
         curr_data = yf.download(tickers_to_dl, period="5d", auto_adjust=True, progress=False)
+        
         latest_prices = {}
-        if len(tickers_to_dl) == 1:
-            latest_prices[tickers_to_dl[0]] = float(curr_data['Close'].iloc[-1])
-        else:
-            for t in tickers_to_dl:
-                try: latest_prices[t] = float(curr_data['Close'][t].dropna().iloc[-1])
-                except: pass
+        if not curr_data.empty:
+            if len(tickers_to_dl) == 1:
+                latest_prices[tickers_to_dl[0]] = float(curr_data['Close'].dropna().iloc[-1]) if 'Close' in curr_data else float(curr_data.dropna().iloc[-1])
+            else:
+                close_df = curr_data['Close'] if 'Close' in curr_data.columns.get_level_values(0) else curr_data
+                for t in tickers_to_dl:
+                    try: latest_prices[t] = float(close_df[t].dropna().iloc[-1])
+                    except: pass
                     
         def get_ret(row):
-            t_full = ticker_map.get(str(row['股票代號']))
+            code_str = str(row['股票代號']).replace('.0', '')
+            t_full = ticker_map.get(code_str)
             lp = latest_prices.get(t_full)
-            if lp and row.get('現價', 0) > 0: return (lp - row['現價']) / row['現價'] * 100
+            curr_price = row.get('現價')
+            if lp and pd.notna(curr_price) and float(curr_price) > 0:
+                return (lp - float(curr_price)) / float(curr_price) * 100
             return None
             
         df_target['Return'] = df_target.apply(get_ret, axis=1)
@@ -302,6 +313,7 @@ def calculate_performance(csv_file):
             elif 10 <= d <= 19: return "10日"
             elif d >= 20: return "20日"
             return None
+            
         df_target['Period'] = df_target['Days'].apply(get_period)
         df_target = df_target.dropna(subset=['Period'])
         
@@ -320,7 +332,9 @@ def calculate_performance(csv_file):
                 else:
                     stats[strategy][period] = {"count": 0, "win_rate": 0, "avg_return": 0, "best_stock": "—"}
         return stats
-    except Exception: return {}
+    except Exception as e:
+        print(f"⚠️ 績效運算錯誤: {e}")
+        return {}
 
 def main():
     try:
