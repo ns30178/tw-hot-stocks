@@ -265,7 +265,11 @@ def check_stock(ticker, name, inst_data):
 def calculate_performance(csv_file):
     if not os.path.exists(csv_file) or os.path.getsize(csv_file) == 0: return {}
     try:
-        df = pd.read_csv(csv_file)
+        # 【關鍵修復】指定編碼，強迫系統正常讀取第一欄的「日期」，避免隱藏字元導致靜默當機
+        df = pd.read_csv(csv_file, encoding='utf-8-sig')
+        # 【裝甲防護】保險起見，強制剔除所有表頭可能殘留的不可見字元
+        df.rename(columns=lambda x: x.strip('\ufeff').strip('ï»¿').strip(), inplace=True)
+        
         if df.empty or '股票代號' not in df.columns: return {}
         
         df['日期'] = pd.to_datetime(df['日期'], errors='coerce')
@@ -449,6 +453,7 @@ def main():
             df_final.to_csv(csv_file, index=False, encoding='utf-8-sig')
 
         perf_stats = calculate_performance(csv_file)
+        
         output_data = {
             "update_time": now.strftime("%Y-%m-%d %H:%M:%S"),
             "latest_data": {
