@@ -265,9 +265,8 @@ def check_stock(ticker, name, inst_data):
 def calculate_performance(csv_file):
     if not os.path.exists(csv_file) or os.path.getsize(csv_file) == 0: return {}
     try:
-        # 【關鍵修復】指定編碼，強迫系統正常讀取第一欄的「日期」，避免隱藏字元導致靜默當機
+        # 【裝甲防護】指定編碼，強制剔除所有表頭可能殘留的不可見字元
         df = pd.read_csv(csv_file, encoding='utf-8-sig')
-        # 【裝甲防護】保險起見，強制剔除所有表頭可能殘留的不可見字元
         df.rename(columns=lambda x: x.strip('\ufeff').strip('ï»¿').strip(), inplace=True)
         
         if df.empty or '股票代號' not in df.columns: return {}
@@ -288,25 +287,43 @@ def calculate_performance(csv_file):
             ticker_map[code_str] = f"{code_str}{suffix}"
             
         tickers_to_dl = list(ticker_map.values())
-        curr_data = yf.download(tickers_to_dl, period="5d", auto_adjust=True, progress=False)
         
-        latest_prices = {}
-        if not curr_data.empty:
-            if len(tickers_to_dl) == 1:
-                latest_prices[tickers_to_dl[0]] = float(curr_data['Close'].dropna().iloc[-1]) if 'Close' in curr_data else float(curr_data.dropna().iloc[-1])
-            else:
-                close_df = curr_data['Close'] if 'Close' in curr_data.columns.get_level_values(0) else curr_data
-                for t in tickers_to_dl:
-                    try: latest_prices[t] = float(close_df[t].dropna().iloc[-1])
-                    except: pass
-                    
+        # 【修改點 3】抓取 1 個月歷史區間，以利計算觸價停損
+        curr_data = yf.download(tickers_to_dl, period="1mo", auto_adjust=True, progress=False)
+        is_single = len(tickers_to_dl) == 1
+        
         def get_ret(row):
             code_str = str(row['股票代號']).replace('.0', '')
             t_full = ticker_map.get(code_str)
-            lp = latest_prices.get(t_full)
-            curr_price = row.get('現價')
-            if lp and pd.notna(curr_price) and float(curr_price) > 0:
-                return (lp - float(curr_price)) / float(curr_price) * 100
+            entry_price = row.get('現價')
+            entry_date = row['日期']
+            
+            if pd.isna(entry_price) or entry_price <= 0 or curr_data.empty:
+                return None
+                
+            try:
+                if is_single:
+                    t_close = curr_data['Close']
+                    t_low = curr_data['Low']
+                else:
+                    t_close = curr_data['Close'][t_full]
+                    t_low = curr_data['Low'][t_full]
+                    
+                # 篩選進榜日之後的資料
+                mask = t_close.index >= pd.to_datetime(entry_date)
+                t_close_after = t_close[mask].dropna()
+                t_low_after = t_low[mask].dropna()
+                
+                if not t_close_after.empty:
+                    lowest_price = t_low_after.min()
+                    latest_close = t_close_after.iloc[-1]
+                    
+                    # 【修改點 3】-15% 停損機制判斷
+                    if lowest_price <= entry_price * 0.85:
+                        return -15.0
+                    else:
+                        return (latest_close - entry_price) / entry_price * 100
+            except: pass
             return None
             
         df_target['Return'] = df_target.apply(get_ret, axis=1)
@@ -330,11 +347,24 @@ def calculate_performance(csv_file):
                 if not p_df.empty:
                     win_rate = (p_df['Return'] > 0).mean() * 100
                     avg_ret = p_df['Return'].mean()
-                    best_row = p_df.loc[p_df['Return'].idxmax()]
-                    best_str = f"{best_row['股票代號']}(+{best_row['Return']:.1f}%)"
-                    stats[strategy][period] = {"count": len(p_df), "win_rate": round(win_rate, 1), "avg_return": round(avg_ret, 2), "best_stock": best_str}
+                    
+                    # 【修改點 4】彙整 JSON 明細陣列，供前端 Modal 顯示
+                    details = [{"code": str(r['股票代號']).replace('.0', ''), "return": r['Return']} for _, r in p_df.iterrows()]
+                    details.sort(key=lambda x: x['return'], reverse=True)
+                    
+                    top_3 = details[:3]
+                    bottom_3 = sorted(details, key=lambda x: x['return'])[:3]
+                    
+                    stats[strategy][period] = {
+                        "count": len(p_df), 
+                        "win_rate": round(win_rate, 1), 
+                        "avg_return": round(avg_ret, 2), 
+                        "details": details,
+                        "top_3": top_3,
+                        "bottom_3": bottom_3
+                    }
                 else:
-                    stats[strategy][period] = {"count": 0, "win_rate": 0, "avg_return": 0, "best_stock": "—"}
+                    stats[strategy][period] = {"count": 0, "win_rate": 0, "avg_return": 0, "details": [], "top_3": [], "bottom_3": []}
         return stats
     except Exception as e:
         print(f"⚠️ 績效運算錯誤: {e}")
@@ -345,6 +375,7 @@ def main():
         print("🚀 系統啟動：台股雙策略觀測站自動化掃描")
         tz_tw = timezone(timedelta(hours=8))
         now = datetime.now(tz_tw)
+        update_date_str = now.strftime("%Y-%m-%d")
         
         # ==========================================
         # 【全時段閃電退場防線】平日非盤後時段、週末假日，一秒攔截以節省時數
@@ -357,9 +388,22 @@ def main():
             print(f"💤 偵測到當前時間為台灣 {now.strftime('%Y-%m-%d %H:%M:%S')} (非盤後更新時段)")
             print("🔒 啟動全時段閃電安全退場機制，一秒終止程式，成功守護 GitHub 運算時數！")
             return
+            
+        # ==========================================
+        # 【修改點 2】異常休市與颱風假阻斷機制
+        # ==========================================
+        try:
+            check_stock = yf.download("0050.TW", period="5d", progress=False)
+            if not check_stock.empty:
+                last_trade_date = check_stock.index[-1].strftime("%Y-%m-%d")
+                if last_trade_date != update_date_str and not is_manual:
+                    print(f"⚠️ 偵測到今日 ({update_date_str}) 台股未開盤 (最後交易日為 {last_trade_date})。")
+                    print("🔒 判斷為異常休市或颱風假，直接凍結系統，避免舊資料錯位覆蓋！")
+                    return
+        except Exception as e:
+            print(f"大盤驗證發生異常，略過休市檢查: {e}")
         # ==========================================
 
-        update_date_str = now.strftime("%Y-%m-%d")
         previous_data = {"update_date": "無", "original_strategy": [], "ai_strategy": [], "intersection": []}
         old_json = {}
         if os.path.exists('daily_hot_stocks.json') and os.path.getsize('daily_hot_stocks.json') > 0:
@@ -438,6 +482,7 @@ def main():
                         lines[0] = lines[0].replace('概念類股', '產業分類')
                         header = lines[0].strip("\n\r").split(',')
                         if '產業分類' not in header: lines[0] = lines[0].strip("\n\r") + ",產業分類,個股熱度\n"
+
                         expected_cols = len(lines[0].split(','))
                         for i in range(1, len(lines)):
                             cols = lines[i].strip("\n\r").split(',')
@@ -450,6 +495,12 @@ def main():
                     print(f"⚠️ CSV 自動修復讀取失敗: {e}")
                     df_final = df_new
             else: df_final = df_new
+            
+            # ==========================================
+            # 【修改點 3】CSV 欄位錯位修復
+            # ==========================================
+            expected_csv_cols = ['日期', '交易所', '股票代號', '股票名稱', '產業分類', '個股熱度', '現價', '單日漲跌幅(%)', '乖離率(%)', '營收YoY(%)', '外資買賣(張)', '投信買賣(張)', '進榜天數', '情緒分析', '新聞連結', '策略']
+            df_final = df_final.reindex(columns=expected_csv_cols)
             df_final.to_csv(csv_file, index=False, encoding='utf-8-sig')
 
         perf_stats = calculate_performance(csv_file)
