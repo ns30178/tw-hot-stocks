@@ -49,6 +49,27 @@
         </div>
     </div>
 
+    <div id="details-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
+        <div class="bg-gray-800 w-full max-w-2xl max-h-[80vh] rounded-lg shadow-2xl relative flex flex-col">
+            <button onclick="closeDetailsModal()" class="absolute -top-4 -right-4 bg-gray-600 text-white rounded-full w-10 h-10 text-xl font-bold border-2 border-white hover:bg-gray-700 z-50">&times;</button>
+            <div class="p-4 border-b border-gray-700">
+                <h3 id="details-modal-title" class="text-xl font-bold text-white">績效明細</h3>
+            </div>
+            <div class="p-4 flex-1 overflow-y-auto">
+                <table class="w-full text-sm text-left text-gray-300">
+                    <thead class="bg-gray-900 text-gray-400">
+                        <tr>
+                            <th class="p-2">股票代號</th>
+                            <th class="p-2 text-right">區間報酬率</th>
+                        </tr>
+                    </thead>
+                    <tbody id="details-modal-body">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <script>
         const COLS = [
             { name: '代號', class: '', key: '股票代號' },
@@ -158,7 +179,40 @@
             `;
         }
 
+        // 新增：開啟明細彈出視窗
+        function openDetailsModal(strategy, period) {
+            const stats = window.globalStats;
+            if (!stats || !stats[strategy] || !stats[strategy][period] || !stats[strategy][period].details) {
+                alert('系統資料累積中或 Python 後端尚未更新，目前無法顯示明細。');
+                return;
+            }
+
+            const data = stats[strategy][period].details;
+            document.getElementById('details-modal-title').innerText = `${strategy} - ${period} 績效明細 (${data.length}檔)`;
+
+            let tbody = '';
+            data.forEach(item => {
+                const isPos = item.return > 0;
+                const isZero = item.return === 0;
+                const colorClass = isPos ? 'text-red-400' : (isZero ? 'text-gray-300' : 'text-green-400');
+                const sign = isPos ? '+' : '';
+                tbody += `
+                    <tr class="border-b border-gray-700 hover:bg-gray-700 transition-colors">
+                        <td class="p-2 font-bold">${item.code}</td>
+                        <td class="p-2 text-right font-bold ${colorClass}">${sign}${item.return.toFixed(2)}%</td>
+                    </tr>`;
+            });
+
+            document.getElementById('details-modal-body').innerHTML = tbody;
+            document.getElementById('details-modal').classList.remove('hidden');
+        }
+
+        function closeDetailsModal() {
+            document.getElementById('details-modal').classList.add('hidden');
+        }
+
         function renderPerformance(stats) {
+            window.globalStats = stats; // 存入全域變數供 Modal 讀取
             const container = document.getElementById('stats-container');
             
             if (!stats || Object.keys(stats).length === 0) {
@@ -173,19 +227,52 @@
             let html = '';
             ['飆股策略', 'AI選股策略'].forEach(strategy => {
                 if(stats[strategy]) {
-                    html += `<div class="bg-gray-700 p-4 rounded"><h3 class="text-lg font-bold text-yellow-300 mb-2">${strategy}</h3><table class="w-full text-sm"><thead><tr class="text-gray-400 border-b border-gray-600"><th class="text-left py-1">持有區間</th><th class="text-right py-1">勝率</th><th class="text-right py-1">平均報酬</th><th class="text-right py-1">最佳標的</th></tr></thead><tbody>`;
+                    // 將表格區塊跨兩欄 (col-span-2) 避免欄位過多導致擁擠
+                    html += `<div class="bg-gray-700 p-4 rounded col-span-1 md:col-span-2"><h3 class="text-lg font-bold text-yellow-300 mb-2">${strategy}</h3>
+                        <div class="overflow-x-auto"><table class="w-full text-sm whitespace-nowrap">
+                        <thead><tr class="text-gray-400 border-b border-gray-600">
+                            <th class="text-left py-1">持有區間</th>
+                            <th class="text-right py-1">勝率</th>
+                            <th class="text-right py-1">平均報酬</th>
+                            <th class="text-left py-1 px-2">Top 3 (獲利)</th>
+                            <th class="text-left py-1 px-2">Bottom 3 (虧損)</th>
+                            <th class="text-center py-1">明細</th>
+                        </tr></thead><tbody>`;
                     
                     ['5日', '10日', '20日'].forEach(period => {
                         const d = stats[strategy][period];
                         if (d && d.count > 0) {
                             const winColor = d.win_rate >= 50 ? 'text-red-400' : 'text-green-400';
                             const retColor = d.avg_return > 0 ? 'text-red-400' : 'text-green-400';
-                            html += `<tr class="border-b border-gray-600"><td class="py-2">${period}</td><td class="text-right font-bold ${winColor}">${d.win_rate}%</td><td class="text-right font-bold ${retColor}">${d.avg_return > 0 ? '+' : ''}${d.avg_return}%</td><td class="text-right text-gray-300">${d.best_stock}</td></tr>`;
+                            
+                            // 相容舊版資料與渲染新版資料
+                            let topHtml = '—';
+                            if (d.top_3 && d.top_3.length > 0) {
+                                topHtml = d.top_3.map(x => `<span class="text-red-400">${x.code}(+${x.return.toFixed(2)}%)</span>`).join(', ');
+                            } else if (d.best_stock && d.best_stock !== '—') {
+                                topHtml = `<span class="text-red-400">${d.best_stock}</span>`; // 暫時兼容舊 Python 輸出的最佳標的
+                            }
+
+                            let botHtml = '—';
+                            if (d.bottom_3 && d.bottom_3.length > 0) {
+                                botHtml = d.bottom_3.map(x => `<span class="text-green-400">${x.code}(${x.return.toFixed(2)}%)</span>`).join(', ');
+                            }
+
+                            html += `<tr class="border-b border-gray-600">
+                                <td class="py-2">${period} <span class="text-gray-400 text-xs">(${d.count}檔)</span></td>
+                                <td class="text-right font-bold ${winColor}">${d.win_rate}%</td>
+                                <td class="text-right font-bold ${retColor}">${d.avg_return > 0 ? '+' : ''}${d.avg_return}%</td>
+                                <td class="text-left px-2 text-xs">${topHtml}</td>
+                                <td class="text-left px-2 text-xs">${botHtml}</td>
+                                <td class="text-center">
+                                    <button onclick="openDetailsModal('${strategy}', '${period}')" class="bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded text-xs transition-colors">展開</button>
+                                </td>
+                            </tr>`;
                         } else {
-                            html += `<tr class="border-b border-gray-600"><td class="py-2 text-gray-500">${period}</td><td class="text-right text-gray-500">—</td><td class="text-right text-gray-500">—</td><td class="text-right text-gray-500">—</td></tr>`;
+                            html += `<tr class="border-b border-gray-600"><td class="py-2 text-gray-500">${period}</td><td class="text-right text-gray-500">—</td><td class="text-right text-gray-500">—</td><td class="text-left px-2 text-gray-500">—</td><td class="text-left px-2 text-gray-500">—</td><td class="text-center text-gray-500">—</td></tr>`;
                         }
                     });
-                    html += `</tbody></table></div>`;
+                    html += `</tbody></table></div></div>`;
                 }
             });
             container.innerHTML = html;
