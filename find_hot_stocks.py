@@ -390,12 +390,12 @@ def main():
             return
             
         # ==========================================
-        # 【修改點 2】異常休市與颱風假阻斷機制
+        # 【修改點 2】異常休市與颱風假阻斷機制 - 修正變數名稱避免撞名
         # ==========================================
         try:
-            check_stock = yf.download("0050.TW", period="5d", progress=False)
-            if not check_stock.empty:
-                last_trade_date = check_stock.index[-1].strftime("%Y-%m-%d")
+            market_check_df = yf.download("0050.TW", period="5d", progress=False)
+            if not market_check_df.empty:
+                last_trade_date = market_check_df.index[-1].strftime("%Y-%m-%d")
                 if last_trade_date != update_date_str and not is_manual:
                     print(f"⚠️ 偵測到今日 ({update_date_str}) 台股未開盤 (最後交易日為 {last_trade_date})。")
                     print("🔒 判斷為異常休市或颱風假，直接凍結系統，避免舊資料錯位覆蓋！")
