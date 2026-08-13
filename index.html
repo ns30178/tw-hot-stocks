@@ -42,11 +42,12 @@
         </div>
     </div>
 
-    <!-- TradingView Modal -->
+    <!-- TradingView Modal (新增除錯顯示列) -->
     <div id="tv-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
         <div class="bg-gray-900 w-full max-w-5xl h-[80vh] rounded-lg shadow-2xl relative flex flex-col">
             <button onclick="closeModal()" class="absolute -top-4 -right-4 bg-red-600 text-white rounded-full w-10 h-10 text-xl font-bold border-2 border-white hover:bg-red-700 z-50">&times;</button>
-            <div id="tv_chart_container" class="flex-1 w-full h-full rounded-lg overflow-hidden"></div>
+            <div id="tv-debug-info" class="text-yellow-400 text-center text-xs py-2 font-bold tracking-widest"></div>
+            <div id="tv_chart_container" class="flex-1 w-full h-full rounded-b-lg overflow-hidden"></div>
         </div>
     </div>
 
@@ -181,7 +182,6 @@
             `;
         }
 
-        // 績效明細 Modal
         function openDetailsModal(strategy, period) {
             const stats = window.globalStats;
             if (!stats || !stats[strategy] || !stats[strategy][period] || !stats[strategy][period].details) {
@@ -214,7 +214,7 @@
         }
 
         function renderPerformance(stats) {
-            window.globalStats = stats; // 存入全域變數供 Modal 讀取
+            window.globalStats = stats; 
             const container = document.getElementById('stats-container');
             
             if (!stats || Object.keys(stats).length === 0) {
@@ -229,7 +229,6 @@
             let html = '';
             ['飆股策略', 'AI選股策略'].forEach(strategy => {
                 if(stats[strategy]) {
-                    // 將表格區塊跨兩欄 (col-span-2) 避免欄位過多導致擁擠
                     html += `<div class="bg-gray-700 p-4 rounded col-span-1 md:col-span-2"><h3 class="text-lg font-bold text-yellow-300 mb-2">${strategy}</h3>
                         <div class="overflow-x-auto"><table class="w-full text-sm whitespace-nowrap">
                         <thead><tr class="text-gray-400 border-b border-gray-600">
@@ -247,12 +246,9 @@
                             const winColor = d.win_rate >= 50 ? 'text-red-400' : 'text-green-400';
                             const retColor = d.avg_return > 0 ? 'text-red-400' : 'text-green-400';
                             
-                            // 相容舊版資料與渲染新版資料
                             let topHtml = '—';
                             if (d.top_3 && d.top_3.length > 0) {
                                 topHtml = d.top_3.map(x => `<span class="text-red-400">${x.code}(+${x.return.toFixed(2)}%)</span>`).join(', ');
-                            } else if (d.best_stock && d.best_stock !== '—') {
-                                topHtml = `<span class="text-red-400">${d.best_stock}</span>`; // 暫時兼容舊 Python 輸出的最佳標的
                             }
 
                             let botHtml = '—';
@@ -281,24 +277,28 @@
         }
 
         // ==========================================
-        // 【修改點】增強 TradingView 防呆過濾機制
+        // 【修改點】增強 TradingView 防呆與強制驗證
         // ==========================================
         function openModal(exchange, code) {
             let validExchange = exchange;
             
-            // 防呆 1：如果抓到 undefined 或空值（舊資料），預設用 TWSE
+            // 判斷是否為無效的舊資料
             if (!validExchange || validExchange === 'undefined' || validExchange === 'null') {
-                validExchange = 'TWSE';
+                validExchange = 'TWSE'; // 預設塞入上市代號
             }
             
-            // 防呆 2：清除股票代號周圍的多餘空白
             let validCode = String(code).trim();
-            
-            // 組合出正確的 TradingView 識別字串
             let tvSymbol = `${validExchange}:${validCode}`;
 
             document.getElementById('tv-modal').classList.remove('hidden');
             document.getElementById('tv_chart_container').innerHTML = '';
+            
+            // 顯示除錯資訊，證明目前執行的是新版網頁
+            const debugEl = document.getElementById('tv-debug-info');
+            if (debugEl) {
+                debugEl.innerText = `>>> 系統送出的代號為：${tvSymbol} <<<`;
+            }
+
             new TradingView.widget({
                 "autosize": true,
                 "symbol": tvSymbol,
@@ -326,6 +326,8 @@
         function closeModal() {
             document.getElementById('tv-modal').classList.add('hidden');
             document.getElementById('tv_chart_container').innerHTML = '';
+            const debugEl = document.getElementById('tv-debug-info');
+            if(debugEl) debugEl.innerText = '';
         }
 
         fetch('daily_hot_stocks.json?t=' + new Date().getTime())
