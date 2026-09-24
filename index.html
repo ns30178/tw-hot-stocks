@@ -66,18 +66,22 @@
         </div>
     </div>
 
-    <!-- 績效明細 Modal -->
+    <!-- 績效明細 Modal (已升級為微型復盤資料庫) -->
     <div id="details-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
-        <div class="bg-gray-800 w-full max-w-2xl max-h-[80vh] rounded-lg shadow-2xl relative flex flex-col">
+        <!-- 將 max-w-2xl 改為 max-w-4xl，以容納更多欄位 -->
+        <div class="bg-gray-800 w-full max-w-4xl max-h-[80vh] rounded-lg shadow-2xl relative flex flex-col">
             <button onclick="closeDetailsModal()" class="absolute -top-4 -right-4 bg-gray-600 text-white rounded-full w-10 h-10 text-xl font-bold border-2 border-white hover:bg-gray-700 z-50">&times;</button>
             <div class="p-4 border-b border-gray-700">
                 <h3 id="details-modal-title" class="text-xl font-bold text-white">績效明細</h3>
             </div>
             <div class="p-4 flex-1 overflow-y-auto">
-                <table class="w-full text-sm text-left text-gray-300">
-                    <thead class="bg-gray-900 text-gray-400">
+                <table class="w-full text-sm text-left text-gray-300 whitespace-nowrap">
+                    <thead class="bg-gray-900 text-gray-400 border-b border-gray-700">
                         <tr>
-                            <th class="p-2">股票代號</th>
+                            <th class="p-2">股票 (點擊看圖)</th>
+                            <th class="p-2">產業分類</th>
+                            <th class="p-2 text-center">進榜日期</th>
+                            <th class="p-2 text-right">進榜價</th>
                             <th class="p-2 text-right">區間報酬率</th>
                         </tr>
                     </thead>
@@ -197,6 +201,9 @@
             `;
         }
 
+        // ==========================================
+        // 【修改點】升級版績效明細 Modal 渲染邏輯
+        // ==========================================
         function openDetailsModal(strategy, period) {
             const stats = window.globalStats;
             if (!stats || !stats[strategy] || !stats[strategy][period] || !stats[strategy][period].details) {
@@ -213,9 +220,23 @@
                 const isZero = item.return === 0;
                 const colorClass = isPos ? 'text-red-400' : (isZero ? 'text-gray-300' : 'text-green-400');
                 const sign = isPos ? '+' : '';
+                
+                // 【向下相容防護】如果讀取到舊版 JSON，自動塞入預設值避免破圖
+                const stockName = item.name && item.name !== '-' ? item.name : '';
+                const exchange = item.exchange || 'TWSE';
+                const industry = item.industry || '-';
+                const entryDate = item.entry_date || '-';
+                const entryPrice = item.entry_price ? parseFloat(item.entry_price).toFixed(2) : '-';
+
                 tbody += `
                     <tr class="border-b border-gray-700 hover:bg-gray-700 transition-colors">
-                        <td class="p-2 font-bold">${item.code}</td>
+                        <td class="p-2 font-bold cursor-pointer text-blue-400 hover:text-blue-300 hover:underline" 
+                            onclick="openModal('${exchange}', '${item.code}')" title="點擊開啟走勢圖">
+                            ${item.code} ${stockName}
+                        </td>
+                        <td class="p-2 text-xs text-gray-400">${industry}</td>
+                        <td class="p-2 text-center text-gray-400">${entryDate}</td>
+                        <td class="p-2 text-right">${entryPrice}</td>
                         <td class="p-2 text-right font-bold ${colorClass}">${sign}${item.return.toFixed(2)}%</td>
                     </tr>`;
             });
@@ -473,4 +494,3 @@
     </script>
 </body>
 </html>
-         
