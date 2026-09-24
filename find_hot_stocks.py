@@ -86,9 +86,6 @@ def get_all_tw_tickers():
             pass
     return tickers
 
-# ==========================================
-# 【新增模組】獲取全市場產業分類與收盤價
-# ==========================================
 def get_industry_mapping_and_prices():
     mapping = {}
     prices = {}
@@ -407,7 +404,24 @@ def calculate_performance(csv_file):
                     win_rate = (p_df['Return'] > 0).mean() * 100
                     avg_ret = p_df['Return'].mean()
                     
-                    details = [{"code": str(r['股票代號']).replace('.0', ''), "return": r['Return']} for _, r in p_df.iterrows()]
+                    # ==========================================
+                    # 【新增防護擴充】在細節中加入名稱、日期、產業分類與進榜價
+                    # ==========================================
+                    details = []
+                    for _, r in p_df.iterrows():
+                        code_str = str(r.get('股票代號', '')).replace('.0', '')
+                        d_obj = r.get('日期')
+                        d_str = d_obj.strftime('%Y-%m-%d') if pd.notna(d_obj) else "-"
+                        details.append({
+                            "code": code_str,
+                            "name": str(r.get('股票名稱', '-')),
+                            "exchange": str(r.get('交易所', 'TWSE')),
+                            "industry": str(r.get('產業分類', '-')),
+                            "entry_date": d_str,
+                            "entry_price": float(r.get('現價', 0.0)) if pd.notna(r.get('現價')) else 0.0,
+                            "return": r['Return']
+                        })
+                        
                     details.sort(key=lambda x: x['return'], reverse=True)
                     
                     top_3 = details[:3]
