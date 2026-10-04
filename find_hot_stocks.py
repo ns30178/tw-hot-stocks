@@ -95,7 +95,7 @@ def get_industry_mapping_and_prices():
         if res.status_code == 200:
             for code, info in res.json().items():
                 if info.get('type') == '股票':
-                    mapping[code] = info.get('industry', '無產業分類')
+                    mapping[code] = info.get('industry', info.get('group', '無產業分類'))
     except Exception:
         pass
         
@@ -105,7 +105,9 @@ def get_industry_mapping_and_prices():
             for item in res.json():
                 code = item.get("Code")
                 try: 
-                    prices[code] = float(item.get("Closing_Price", 0))
+                    val = item.get("ClosingPrice")
+                    if val:
+                        prices[code] = float(str(val).replace(',', ''))
                 except Exception: 
                     pass
     except Exception:
@@ -117,7 +119,9 @@ def get_industry_mapping_and_prices():
             for item in res.json():
                 code = item.get("SecuritiesCompanyCode")
                 try: 
-                    prices[code] = float(item.get("Close", 0))
+                    val = item.get("Close")
+                    if val:
+                        prices[code] = float(str(val).replace(',', ''))
                 except Exception: 
                     pass
     except Exception:
@@ -404,9 +408,6 @@ def calculate_performance(csv_file):
                     win_rate = (p_df['Return'] > 0).mean() * 100
                     avg_ret = p_df['Return'].mean()
                     
-                    # ==========================================
-                    # 【新增防護擴充】在細節中加入名稱、日期、產業分類與進榜價
-                    # ==========================================
                     details = []
                     for _, r in p_df.iterrows():
                         code_str = str(r.get('股票代號', '')).replace('.0', '')
