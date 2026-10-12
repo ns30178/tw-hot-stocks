@@ -73,15 +73,16 @@ def get_all_tw_tickers():
         pass
 
     if len(tickers) < 1000:
-        print("⚠️ OpenAPI 獲取清單失敗，啟用 Github 備援清單...")
+        print("⚠️ OpenAPI 獲取清單失敗，啟用備援清單...")
         try:
-            res = scraper.get("https://raw.githubusercontent.com/shihzhan/twstock/master/twstock/codes.json", timeout=15)
+            res = global_session.get("https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo", timeout=15)
             if res.status_code == 200:
-                data = res.json()
-                for code, info in data.items():
-                    if info['type'] == '股票' and len(code) == 4:
-                        suffix = ".TW" if info['market'] == '上市' else ".TWO"
-                        tickers[f"{code}{suffix}"] = info['name']
+                for item in res.json().get("data", []):
+                    code = str(item.get("stock_id", "")).strip()
+                    market_type = item.get("type", "")
+                    if len(code) == 4 and code.isdigit() and market_type in ["twse", "tpex"]:
+                        suffix = ".TW" if market_type == "twse" else ".TWO"
+                        tickers[f"{code}{suffix}"] = item.get("stock_name", code)
         except Exception:
             pass
     return tickers
@@ -90,15 +91,38 @@ def get_industry_mapping_and_prices():
     mapping = {}
     prices = {}
     
+    # 0-1. 取得產業分類 (第一順位：FinMind 公開資料庫，不受海外 IP 阻擋)
     try:
-        res = global_session.get("https://raw.githubusercontent.com/shihzhan/twstock/master/twstock/codes.json", timeout=20)
+        res = global_session.get("https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo", timeout=20)
         if res.status_code == 200:
-            for code, info in res.json().items():
-                if info.get('type') == '股票':
-                    clean_code = str(code).strip()
-                    mapping[clean_code] = info.get('industry') or info.get('group') or '無產業分類'
+            for item in res.json().get("data", []):
+                code = str(item.get("stock_id", "")).strip()
+                ind = str(item.get("industry_category", "")).strip()
+                if len(code) == 4 and code.isdigit() and ind and ind not in ["Index", "大盤", "ETF", "上櫃指數股票型基金(ETF)"]:
+                    mapping[code] = ind
     except Exception:
         pass
+
+    # 0-2. 取得產業分類 (第二順位備援：證交所與櫃買中心 ISIN 官方公告表)
+    if len(mapping) < 1000:
+        for mode in [2, 4]:
+            try:
+                res = scraper.get(f"https://isin.twse.com.tw/isin/C_public.jsp?strMode={mode}", timeout=20)
+                if res.status_code == 200:
+                    res.encoding = 'big5'
+                    soup = BeautifulSoup(res.text, 'html.parser')
+                    for tr in soup.find_all('tr'):
+                        tds = tr.find_all('td')
+                        if len(tds) >= 5:
+                            raw_code = tds[0].text.strip().replace('\u3000', ' ')
+                            parts = raw_code.split()
+                            if parts:
+                                code = parts[0].strip()
+                                ind = tds[4].text.strip()
+                                if len(code) == 4 and code.isdigit() and ind:
+                                    mapping[code] = ind
+            except Exception:
+                pass
         
     # 1. 上市收盤價 (OpenAPI)
     try:
@@ -635,8 +659,23 @@ def main():
         for s in results_original: s_copy = s.copy(); s_copy['策略'] = '飆股策略'; all_results.append(s_copy)
         for s in results_ai: s_copy = s.copy(); s_copy['策略'] = 'AI選股策略'; all_results.append(s_copy)
         for s in results_intersection: s_copy = s.copy(); s_copy['策略'] = '核心交集'; all_results.append(s_copy)
-        
-        if not all_results:
+
+        # ==========================================
+        # 【同日防殘缺覆蓋保護】若同日重跑遭遇 Yahoo 限流導致檔數暴跌，保留當日原有名單
+        # ==========================================
+        existing_same_day_count = (
+            len(latest_in_file.get("original_strategy", [])) +
+            len(latest_in_file.get("ai_strategy", [])) +
+            len(latest_in_file.get("intersection", []))
+        )
+        skip_csv_overwrite = False
+        if is_same_day and existing_same_day_count > 0 and len(all_results) < (existing_same_day_count * 0.5):
+            print("⚠️ 偵測到同日重跑選股數量異常驟減 (可能遭遇 Yahoo 限流)，保留當日既有完整選股名單！")
+            results_original = latest_in_file.get("original_strategy", [])
+            results_ai = latest_in_file.get("ai_strategy", [])
+            results_intersection = latest_in_file.get("intersection", [])
+            skip_csv_overwrite = True
+        elif not all_results:
             print("⚠️ 本次掃描無標的進榜，啟動版面保護機制，放棄覆蓋資料。")
             notify_msg = (
                 f"\n📊 台股雙策略觀測站 (防呆保護)\n"
@@ -647,7 +686,7 @@ def main():
             send_telegram_notify(notify_msg)
             return
 
-        if all_results:
+        if all_results and not skip_csv_overwrite:
             df_new = pd.DataFrame(all_results)
             df_new.insert(0, '日期', update_date_str)
             if os.path.exists(csv_file) and os.path.getsize(csv_file) > 0:
