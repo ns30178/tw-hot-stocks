@@ -56,7 +56,7 @@ def get_all_tw_tickers():
         res = scraper.get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", timeout=15)
         if res.status_code == 200:
             for item in res.json():
-                code = item.get("Code")
+                code = str(item.get("Code", "")).strip()
                 if code and len(code) == 4 and code.isdigit():
                     tickers[f"{code}.TW"] = item.get("Name")
     except Exception:
@@ -66,7 +66,7 @@ def get_all_tw_tickers():
         res = scraper.get("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes", timeout=15)
         if res.status_code == 200:
             for item in res.json():
-                code = item.get("SecuritiesCompanyCode")
+                code = str(item.get("SecuritiesCompanyCode", "")).strip()
                 if code and len(code) == 4 and code.isdigit():
                     tickers[f"{code}.TWO"] = item.get("CompanyName")
     except Exception:
@@ -91,41 +91,81 @@ def get_industry_mapping_and_prices():
     prices = {}
     
     try:
-        res = scraper.get("https://raw.githubusercontent.com/shihzhan/twstock/master/twstock/codes.json", timeout=10)
+        res = global_session.get("https://raw.githubusercontent.com/shihzhan/twstock/master/twstock/codes.json", timeout=20)
         if res.status_code == 200:
             for code, info in res.json().items():
                 if info.get('type') == '股票':
-                    mapping[code] = info.get('industry', info.get('group', '無產業分類'))
+                    clean_code = str(code).strip()
+                    mapping[clean_code] = info.get('industry') or info.get('group') or '無產業分類'
     except Exception:
         pass
         
+    # 1. 上市收盤價 (OpenAPI)
     try:
-        res = scraper.get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", timeout=10)
+        res = global_session.get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", timeout=15)
         if res.status_code == 200:
             for item in res.json():
-                code = item.get("Code")
+                code = str(item.get("Code", "")).strip()
                 try: 
                     val = item.get("ClosingPrice")
                     if val:
-                        prices[code] = float(str(val).replace(',', ''))
+                        prices[code] = float(str(val).replace(',', '').strip())
                 except Exception: 
                     pass
     except Exception:
         pass
+
+    # 1-1. 上市收盤價備援 (當 GitHub IP 被 OpenAPI 阻擋時啟用)
+    if len(prices) < 500:
+        try:
+            res = scraper.get("https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?response=json&type=ALL", timeout=15)
+            if res.status_code == 200:
+                for table in res.json().get("tables", []):
+                    fields = table.get("fields", [])
+                    if "證券代號" in fields and "收盤價" in fields:
+                        c_idx = fields.index("證券代號")
+                        p_idx = fields.index("收盤價")
+                        for row in table.get("data", []):
+                            try:
+                                code = str(row[c_idx]).strip()
+                                prices[code] = float(str(row[p_idx]).replace(',', '').strip())
+                            except Exception:
+                                pass
+        except Exception:
+            pass
     
+    # 2. 上櫃收盤價 (OpenAPI)
+    tpex_count = 0
     try:
-        res = scraper.get("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes", timeout=10)
+        res = global_session.get("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes", timeout=15)
         if res.status_code == 200:
             for item in res.json():
-                code = item.get("SecuritiesCompanyCode")
+                code = str(item.get("SecuritiesCompanyCode", "")).strip()
                 try: 
                     val = item.get("Close")
                     if val:
-                        prices[code] = float(str(val).replace(',', ''))
+                        prices[code] = float(str(val).replace(',', '').strip())
+                        tpex_count += 1
                 except Exception: 
                     pass
     except Exception:
         pass
+
+    # 2-1. 上櫃收盤價備援
+    if tpex_count < 300:
+        try:
+            res = scraper.get("https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?response=json", timeout=15)
+            if res.status_code == 200:
+                for table in res.json().get("tables", []):
+                    for row in table.get("data", []):
+                        if len(row) >= 3:
+                            try:
+                                code = str(row[0]).strip()
+                                prices[code] = float(str(row[2]).replace(',', '').strip())
+                            except Exception:
+                                pass
+        except Exception:
+            pass
     
     return mapping, prices
 
@@ -139,31 +179,42 @@ def get_institutional_data():
         twse_date = check_time.strftime("%Y%m%d")
         tpex_date = f"{check_time.year - 1911}/{check_time.strftime('%m/%d')}"
         data_found = False
+        twse_loaded = False
+
+        # 獨立 try 區塊 1：嘗試 TWSE OpenAPI
         try:
             res_open = scraper.get("https://openapi.twse.com.tw/v1/fund/T86_ALL", timeout=10)
-            if res_open.status_code == 200 and len(res_open.json()) > 100:
-                for item in res_open.json():
-                    code = item.get("Code")
-                    fi = item.get("Foreign_Investor_Diff", 0)
-                    it = item.get("Investment_Trust_Diff", 0)
-                    dl = item.get("Dealer_Diff", 0)
-                    try:
-                        inst_data[code] = {
-                            "FI": int(str(fi).replace(',', '')) // 1000,
-                            "IT": int(str(it).replace(',', '')) // 1000,
-                            "DL": int(str(dl).replace(',', '')) // 1000
-                        }
-                    except Exception:
-                        pass
-                data_found = True
-            else:
+            if res_open.status_code == 200:
+                open_json = res_open.json()
+                if isinstance(open_json, list) and len(open_json) > 100:
+                    for item in open_json:
+                        code = str(item.get("Code", "")).strip()
+                        fi = item.get("Foreign_Investor_Diff", 0)
+                        it = item.get("Investment_Trust_Diff", 0)
+                        dl = item.get("Dealer_Diff", 0)
+                        try:
+                            inst_data[code] = {
+                                "FI": int(str(fi).replace(',', '').strip()) // 1000,
+                                "IT": int(str(it).replace(',', '').strip()) // 1000,
+                                "DL": int(str(dl).replace(',', '').strip()) // 1000
+                            }
+                        except Exception:
+                            pass
+                    data_found = True
+                    twse_loaded = True
+        except Exception:
+            pass
+
+        # 獨立 try 區塊 2：若 OpenAPI 失敗，必定執行 TWSE 網頁版 API
+        if not twse_loaded:
+            try:
                 url_twse = f"https://www.twse.com.tw/rwd/zh/fund/T86?date={twse_date}&selectType=ALL&response=json"
-                res_twse = scraper.get(url_twse, timeout=10)
+                res_twse = scraper.get(url_twse, timeout=15)
                 if res_twse.status_code == 200:
                     data = res_twse.json().get('data', [])
                     if data:
                         for row in data:
-                            code = row[0]
+                            code = str(row[0]).strip()
                             try:
                                 fi = int(str(row[4]).replace(',', '').strip()) // 1000
                                 it = int(str(row[10]).replace(',', '').strip()) // 1000
@@ -172,19 +223,22 @@ def get_institutional_data():
                             except Exception:
                                 pass
                         data_found = True
-        except Exception:
-            pass
+            except Exception:
+                pass
 
+        # 獨立 try 區塊 3：TPEX 三大法人 (同時相容新舊版格式)
+        tpex_loaded = False
         try:
-            url_tpex = f"https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=json&d={tpex_date}"
-            res_tpex = scraper.get(url_tpex, timeout=10)
+            url_tpex_new = f"https://www.tpex.org.tw/www/zh-tw/institutional/dailyTrade?type=Daily&sect=AL&date={tpex_date}&id=&response=json"
+            res_tpex = scraper.get(url_tpex_new, timeout=15)
             if res_tpex.status_code == 200:
                 json_data = res_tpex.json()
-                data = json_data.get('aaData', json_data.get('data', []))
+                tables = json_data.get('tables', [])
+                data = tables[0].get('data', []) if tables else json_data.get('aaData', json_data.get('data', []))
                 if data:
                     for row in data:
                         if len(row) >= 12:
-                            code = row[0]
+                            code = str(row[0]).strip()
                             try:
                                 fi = int(str(row[8]).replace(',', '').strip()) // 1000
                                 it = int(str(row[11]).replace(',', '').strip()) // 1000
@@ -193,8 +247,32 @@ def get_institutional_data():
                             except Exception:
                                 pass
                     data_found = True
+                    tpex_loaded = True
         except Exception:
             pass
+
+        if not tpex_loaded:
+            try:
+                url_tpex = f"https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=json&d={tpex_date}"
+                res_tpex = scraper.get(url_tpex, timeout=10)
+                if res_tpex.status_code == 200:
+                    json_data = res_tpex.json()
+                    data = json_data.get('aaData', json_data.get('data', []))
+                    if data:
+                        for row in data:
+                            if len(row) >= 12:
+                                code = str(row[0]).strip()
+                                try:
+                                    fi = int(str(row[8]).replace(',', '').strip()) // 1000
+                                    it = int(str(row[11]).replace(',', '').strip()) // 1000
+                                    dl = int(str(row[24]).replace(',', '').strip()) // 1000 if len(row) > 24 else 0
+                                    inst_data[code] = {"FI": fi, "IT": it, "DL": dl}
+                                except Exception:
+                                    pass
+                        data_found = True
+            except Exception:
+                pass
+
         if data_found and len(inst_data) > 0:
             break
     return inst_data
@@ -290,7 +368,7 @@ def check_stock(ticker, name, inst_data):
 
         if not (tech_a_pass or tech_b_pass): return None
 
-        code_only = ticker.split('.')[0]
+        code_only = ticker.split('.')[0].strip()
         inst = inst_data.get(code_only, {"FI": 0, "IT": 0, "DL": 0})
         if code_only in inst_data and (inst["FI"] + inst["IT"] + inst["DL"]) < 0: return None
 
@@ -340,7 +418,7 @@ def calculate_performance(csv_file):
         
         ticker_map = {}
         for _, row in df_target.drop_duplicates('股票代號').iterrows():
-            code_str = str(row['股票代號']).replace('.0', '')
+            code_str = str(row['股票代號']).replace('.0', '').strip()
             suffix = ".TW" if row.get('交易所') == "TWSE" else ".TWO"
             ticker_map[code_str] = f"{code_str}{suffix}"
             
@@ -350,7 +428,7 @@ def calculate_performance(csv_file):
         is_single = len(tickers_to_dl) == 1
         
         def get_ret(row):
-            code_str = str(row['股票代號']).replace('.0', '')
+            code_str = str(row['股票代號']).replace('.0', '').strip()
             t_full = ticker_map.get(code_str)
             entry_price = row.get('現價')
             entry_date = row['日期']
@@ -410,7 +488,7 @@ def calculate_performance(csv_file):
                     
                     details = []
                     for _, r in p_df.iterrows():
-                        code_str = str(r.get('股票代號', '')).replace('.0', '')
+                        code_str = str(r.get('股票代號', '')).replace('.0', '').strip()
                         d_obj = r.get('日期')
                         d_str = d_obj.strftime('%Y-%m-%d') if pd.notna(d_obj) else "-"
                         details.append({
@@ -500,11 +578,12 @@ def main():
         today_industry_flow = {}
         
         for code, inst in inst_data.items():
-            price = close_prices.get(code, 0)
+            clean_code = str(code).strip()
+            price = close_prices.get(clean_code, 0)
             if price > 0:
                 total_lots = inst.get("FI", 0) + inst.get("IT", 0) + inst.get("DL", 0)
                 net_amount_100m = (total_lots * price) / 100000
-                ind = industry_mapping.get(code, "無產業分類")
+                ind = industry_mapping.get(clean_code, "無產業分類")
                 
                 if ind not in today_industry_flow:
                     today_industry_flow[ind] = 0
