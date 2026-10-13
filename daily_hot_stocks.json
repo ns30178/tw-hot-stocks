@@ -1,5 +1,5 @@
 {
-    "update_time": "2026-10-13 18:00:57",
+    "update_time": "2026-10-13 22:52:28",
     "latest_data": {
         "update_date": "2026-10-13",
         "original_strategy": [
@@ -2015,57 +2015,12 @@
                         "return": -10.248759255480412
                     },
                     {
-                        "code": "6164",
-                        "name": "華興",
-                        "exchange": "TWSE",
-                        "industry": "光電",
-                        "entry_date": "2026-07-03",
-                        "entry_price": 17.4,
-                        "return": -15.0
-                    },
-                    {
-                        "code": "3004",
-                        "name": "豐達科",
-                        "exchange": "TWSE",
-                        "industry": "鋼鐵",
-                        "entry_date": "2026-07-03",
-                        "entry_price": 150.0,
-                        "return": -15.0
-                    },
-                    {
-                        "code": "6409",
-                        "name": "旭隼",
-                        "exchange": "TWSE",
-                        "industry": "其他電子",
-                        "entry_date": "2026-07-03",
-                        "entry_price": 1255.0,
-                        "return": -15.0
-                    },
-                    {
-                        "code": "2415",
-                        "name": "錩新",
-                        "exchange": "TWSE",
-                        "industry": "電子零組件",
-                        "entry_date": "2026-07-03",
-                        "entry_price": 37.9,
-                        "return": -15.0
-                    },
-                    {
-                        "code": "2236",
-                        "name": "百達-KY",
-                        "exchange": "TWSE",
-                        "industry": "汽車",
-                        "entry_date": "2026-07-03",
-                        "entry_price": 184.0,
-                        "return": -15.0
-                    },
-                    {
-                        "code": "3402",
-                        "name": "漢科",
+                        "code": "3594",
+                        "name": "磐儀",
                         "exchange": "TPEX",
-                        "industry": "櫃其他電子",
+                        "industry": "櫃電腦週邊",
                         "entry_date": "2026-07-03",
-                        "entry_price": 155.0,
+                        "entry_price": 58.7,
                         "return": -15.0
                     },
                     {
@@ -2078,15 +2033,6 @@
                         "return": -15.0
                     },
                     {
-                        "code": "3594",
-                        "name": "磐儀",
-                        "exchange": "TPEX",
-                        "industry": "櫃電腦週邊",
-                        "entry_date": "2026-07-03",
-                        "entry_price": 58.7,
-                        "return": -15.0
-                    },
-                    {
                         "code": "8091",
                         "name": "翔名",
                         "exchange": "TPEX",
@@ -2096,12 +2042,12 @@
                         "return": -15.0
                     },
                     {
-                        "code": "7795",
-                        "name": "長廣",
-                        "exchange": "TWSE",
-                        "industry": "電子零組件",
+                        "code": "2061",
+                        "name": "風青",
+                        "exchange": "TPEX",
+                        "industry": "櫃電器電纜",
                         "entry_date": "2026-07-03",
-                        "entry_price": 626.0,
+                        "entry_price": 74.2,
                         "return": -15.0
                     },
                     {
@@ -2114,12 +2060,57 @@
                         "return": -15.0
                     },
                     {
-                        "code": "2061",
-                        "name": "風青",
+                        "code": "3402",
+                        "name": "漢科",
                         "exchange": "TPEX",
-                        "industry": "櫃電器電纜",
+                        "industry": "櫃其他電子",
                         "entry_date": "2026-07-03",
-                        "entry_price": 74.2,
+                        "entry_price": 155.0,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "2236",
+                        "name": "百達-KY",
+                        "exchange": "TWSE",
+                        "industry": "汽車",
+                        "entry_date": "2026-07-03",
+                        "entry_price": 184.0,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "2415",
+                        "name": "錩新",
+                        "exchange": "TWSE",
+                        "industry": "電子零組件",
+                        "entry_date": "2026-07-03",
+                        "entry_price": 37.9,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "3004",
+                        "name": "豐達科",
+                        "exchange": "TWSE",
+                        "industry": "鋼鐵",
+                        "entry_date": "2026-07-03",
+                        "entry_price": 150.0,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "6164",
+                        "name": "華興",
+                        "exchange": "TWSE",
+                        "industry": "光電",
+                        "entry_date": "2026-07-03",
+                        "entry_price": 17.4,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "6409",
+                        "name": "旭隼",
+                        "exchange": "TWSE",
+                        "industry": "其他電子",
+                        "entry_date": "2026-07-03",
+                        "entry_price": 1255.0,
                         "return": -15.0
                     },
                     {
@@ -2141,39 +2132,21 @@
                         "return": -15.0
                     },
                     {
-                        "code": "4923",
-                        "name": "力士",
-                        "exchange": "TPEX",
-                        "industry": "櫃半導體",
-                        "entry_date": "2026-07-06",
-                        "entry_price": 65.7,
+                        "code": "7795",
+                        "name": "長廣",
+                        "exchange": "TWSE",
+                        "industry": "電子零組件",
+                        "entry_date": "2026-07-03",
+                        "entry_price": 626.0,
                         "return": -15.0
                     },
                     {
-                        "code": "4534",
-                        "name": "慶騰",
-                        "exchange": "TPEX",
-                        "industry": "櫃電機",
+                        "code": "8438",
+                        "name": "昶昕",
+                        "exchange": "TWSE",
+                        "industry": "綠能環保",
                         "entry_date": "2026-07-06",
-                        "entry_price": 36.1,
-                        "return": -15.0
-                    },
-                    {
-                        "code": "6109",
-                        "name": "亞元",
-                        "exchange": "TPEX",
-                        "industry": "櫃通訊網路",
-                        "entry_date": "2026-07-06",
-                        "entry_price": 14.2,
-                        "return": -15.0
-                    },
-                    {
-                        "code": "6138",
-                        "name": "茂達",
-                        "exchange": "TPEX",
-                        "industry": "櫃半導體",
-                        "entry_date": "2026-07-06",
-                        "entry_price": 440.0,
+                        "entry_price": 106.5,
                         "return": -15.0
                     },
                     {
@@ -2213,48 +2186,21 @@
                         "return": -15.0
                     },
                     {
-                        "code": "6799",
-                        "name": "來頡",
-                        "exchange": "TWSE",
-                        "industry": "半導體",
-                        "entry_date": "2026-07-06",
-                        "entry_price": 111.5,
-                        "return": -15.0
-                    },
-                    {
-                        "code": "8081",
-                        "name": "致新",
-                        "exchange": "TWSE",
-                        "industry": "半導體",
-                        "entry_date": "2026-07-06",
-                        "entry_price": 324.0,
-                        "return": -15.0
-                    },
-                    {
-                        "code": "8438",
-                        "name": "昶昕",
-                        "exchange": "TWSE",
-                        "industry": "綠能環保",
-                        "entry_date": "2026-07-06",
-                        "entry_price": 106.5,
-                        "return": -15.0
-                    },
-                    {
-                        "code": "3675",
-                        "name": "德微",
+                        "code": "6138",
+                        "name": "茂達",
                         "exchange": "TPEX",
                         "industry": "櫃半導體",
                         "entry_date": "2026-07-06",
-                        "entry_price": 450.0,
+                        "entry_price": 440.0,
                         "return": -15.0
                     },
                     {
-                        "code": "4127",
-                        "name": "天良",
+                        "code": "6109",
+                        "name": "亞元",
                         "exchange": "TPEX",
-                        "industry": "櫃生技",
+                        "industry": "櫃通訊網路",
                         "entry_date": "2026-07-06",
-                        "entry_price": 76.7,
+                        "entry_price": 14.2,
                         "return": -15.0
                     },
                     {
@@ -2267,6 +2213,51 @@
                         "return": -15.0
                     },
                     {
+                        "code": "4127",
+                        "name": "天良",
+                        "exchange": "TPEX",
+                        "industry": "櫃生技",
+                        "entry_date": "2026-07-06",
+                        "entry_price": 76.7,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "3675",
+                        "name": "德微",
+                        "exchange": "TPEX",
+                        "industry": "櫃半導體",
+                        "entry_date": "2026-07-06",
+                        "entry_price": 450.0,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "4923",
+                        "name": "力士",
+                        "exchange": "TPEX",
+                        "industry": "櫃半導體",
+                        "entry_date": "2026-07-06",
+                        "entry_price": 65.7,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "8081",
+                        "name": "致新",
+                        "exchange": "TWSE",
+                        "industry": "半導體",
+                        "entry_date": "2026-07-06",
+                        "entry_price": 324.0,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "6799",
+                        "name": "來頡",
+                        "exchange": "TWSE",
+                        "industry": "半導體",
+                        "entry_date": "2026-07-06",
+                        "entry_price": 111.5,
+                        "return": -15.0
+                    },
+                    {
                         "code": "3567",
                         "name": "逸昌",
                         "exchange": "TPEX",
@@ -2276,12 +2267,12 @@
                         "return": -15.0
                     },
                     {
-                        "code": "8421",
-                        "name": "旭源",
+                        "code": "4534",
+                        "name": "慶騰",
                         "exchange": "TPEX",
-                        "industry": "櫃其他",
-                        "entry_date": "2026-07-07",
-                        "entry_price": 14.25,
+                        "industry": "櫃電機",
+                        "entry_date": "2026-07-06",
+                        "entry_price": 36.1,
                         "return": -15.0
                     },
                     {
@@ -2291,6 +2282,15 @@
                         "industry": "生技",
                         "entry_date": "2026-07-07",
                         "entry_price": 268.0,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "8421",
+                        "name": "旭源",
+                        "exchange": "TPEX",
+                        "industry": "櫃其他",
+                        "entry_date": "2026-07-07",
+                        "entry_price": 14.25,
                         "return": -15.0
                     },
                     {
@@ -2312,15 +2312,6 @@
                         "return": -15.0
                     },
                     {
-                        "code": "3303",
-                        "name": "岱稜",
-                        "exchange": "TPEX",
-                        "industry": "櫃其他電子",
-                        "entry_date": "2026-07-14",
-                        "entry_price": 57.4,
-                        "return": -15.0
-                    },
-                    {
                         "code": "1342",
                         "name": "八貫",
                         "exchange": "TWSE",
@@ -2330,12 +2321,12 @@
                         "return": -15.0
                     },
                     {
-                        "code": "6949",
-                        "name": "沛爾生醫-創",
-                        "exchange": "TWSE",
-                        "industry": "生技",
-                        "entry_date": "2026-07-15",
-                        "entry_price": 1025.0,
+                        "code": "3303",
+                        "name": "岱稜",
+                        "exchange": "TPEX",
+                        "industry": "櫃其他電子",
+                        "entry_date": "2026-07-14",
+                        "entry_price": 57.4,
                         "return": -15.0
                     },
                     {
@@ -2345,6 +2336,15 @@
                         "industry": "櫃綠能環保",
                         "entry_date": "2026-07-15",
                         "entry_price": 225.0,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "6949",
+                        "name": "沛爾生醫-創",
+                        "exchange": "TWSE",
+                        "industry": "生技",
+                        "entry_date": "2026-07-15",
+                        "entry_price": 1025.0,
                         "return": -15.0
                     },
                     {
@@ -2384,21 +2384,21 @@
                         "return": -15.0
                     },
                     {
-                        "code": "3577",
-                        "name": "泓格",
-                        "exchange": "TPEX",
-                        "industry": "櫃電腦週邊",
-                        "entry_date": "2026-07-23",
-                        "entry_price": 160.0,
-                        "return": -15.0
-                    },
-                    {
                         "code": "6944",
                         "name": "兆聯實業",
                         "exchange": "TWSE",
                         "industry": "綠能環保",
                         "entry_date": "2026-07-23",
                         "entry_price": 829.0,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "3577",
+                        "name": "泓格",
+                        "exchange": "TPEX",
+                        "industry": "櫃電腦週邊",
+                        "entry_date": "2026-07-23",
+                        "entry_price": 160.0,
                         "return": -15.0
                     },
                     {
@@ -2568,30 +2568,30 @@
                 ],
                 "bottom_3": [
                     {
-                        "code": "6164",
-                        "name": "華興",
-                        "exchange": "TWSE",
-                        "industry": "光電",
+                        "code": "3594",
+                        "name": "磐儀",
+                        "exchange": "TPEX",
+                        "industry": "櫃電腦週邊",
                         "entry_date": "2026-07-03",
-                        "entry_price": 17.4,
+                        "entry_price": 58.7,
                         "return": -15.0
                     },
                     {
-                        "code": "3004",
-                        "name": "豐達科",
-                        "exchange": "TWSE",
-                        "industry": "鋼鐵",
+                        "code": "6223",
+                        "name": "旺矽",
+                        "exchange": "TPEX",
+                        "industry": "櫃半導體",
                         "entry_date": "2026-07-03",
-                        "entry_price": 150.0,
+                        "entry_price": 7380.0,
                         "return": -15.0
                     },
                     {
-                        "code": "6409",
-                        "name": "旭隼",
-                        "exchange": "TWSE",
-                        "industry": "其他電子",
+                        "code": "8091",
+                        "name": "翔名",
+                        "exchange": "TPEX",
+                        "industry": "櫃半導體",
                         "entry_date": "2026-07-03",
-                        "entry_price": 1255.0,
+                        "entry_price": 293.5,
                         "return": -15.0
                     }
                 ]
@@ -5722,33 +5722,6 @@
                         "return": -13.930348258706468
                     },
                     {
-                        "code": "6143",
-                        "name": "振曜",
-                        "exchange": "TPEX",
-                        "industry": "櫃通訊網路",
-                        "entry_date": "2026-07-03",
-                        "entry_price": 106.5,
-                        "return": -15.0
-                    },
-                    {
-                        "code": "5490",
-                        "name": "同亨",
-                        "exchange": "TPEX",
-                        "industry": "櫃電腦週邊",
-                        "entry_date": "2026-07-03",
-                        "entry_price": 30.45,
-                        "return": -15.0
-                    },
-                    {
-                        "code": "4743",
-                        "name": "合一",
-                        "exchange": "TPEX",
-                        "industry": "櫃生技",
-                        "entry_date": "2026-07-03",
-                        "entry_price": 57.3,
-                        "return": -15.0
-                    },
-                    {
                         "code": "4109",
                         "name": "加捷生醫",
                         "exchange": "TPEX",
@@ -5764,6 +5737,42 @@
                         "industry": "櫃其他電子",
                         "entry_date": "2026-07-03",
                         "entry_price": 88.4,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "4743",
+                        "name": "合一",
+                        "exchange": "TPEX",
+                        "industry": "櫃生技",
+                        "entry_date": "2026-07-03",
+                        "entry_price": 57.3,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "5490",
+                        "name": "同亨",
+                        "exchange": "TPEX",
+                        "industry": "櫃電腦週邊",
+                        "entry_date": "2026-07-03",
+                        "entry_price": 30.45,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "6143",
+                        "name": "振曜",
+                        "exchange": "TPEX",
+                        "industry": "櫃通訊網路",
+                        "entry_date": "2026-07-03",
+                        "entry_price": 106.5,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "3518",
+                        "name": "柏騰",
+                        "exchange": "TWSE",
+                        "industry": "其他電子",
+                        "entry_date": "2026-07-03",
+                        "entry_price": 36.35,
                         "return": -15.0
                     },
                     {
@@ -5785,21 +5794,12 @@
                         "return": -15.0
                     },
                     {
-                        "code": "3518",
-                        "name": "柏騰",
+                        "code": "6235",
+                        "name": "華孚",
                         "exchange": "TWSE",
-                        "industry": "其他電子",
-                        "entry_date": "2026-07-03",
-                        "entry_price": 36.35,
-                        "return": -15.0
-                    },
-                    {
-                        "code": "3708",
-                        "name": "上緯投控",
-                        "exchange": "TWSE",
-                        "industry": "綠能環保",
+                        "industry": "電腦週邊",
                         "entry_date": "2026-07-06",
-                        "entry_price": 118.5,
+                        "entry_price": 46.95,
                         "return": -15.0
                     },
                     {
@@ -5821,12 +5821,12 @@
                         "return": -15.0
                     },
                     {
-                        "code": "8038",
-                        "name": "長園科",
-                        "exchange": "TPEX",
-                        "industry": "櫃電子零組件",
+                        "code": "3708",
+                        "name": "上緯投控",
+                        "exchange": "TWSE",
+                        "industry": "綠能環保",
                         "entry_date": "2026-07-06",
-                        "entry_price": 44.15,
+                        "entry_price": 118.5,
                         "return": -15.0
                     },
                     {
@@ -5839,21 +5839,21 @@
                         "return": -15.0
                     },
                     {
+                        "code": "8038",
+                        "name": "長園科",
+                        "exchange": "TPEX",
+                        "industry": "櫃電子零組件",
+                        "entry_date": "2026-07-06",
+                        "entry_price": 44.15,
+                        "return": -15.0
+                    },
+                    {
                         "code": "3323",
                         "name": "加百裕",
                         "exchange": "TPEX",
                         "industry": "櫃電腦週邊",
                         "entry_date": "2026-07-06",
                         "entry_price": 37.6,
-                        "return": -15.0
-                    },
-                    {
-                        "code": "6235",
-                        "name": "華孚",
-                        "exchange": "TWSE",
-                        "industry": "電腦週邊",
-                        "entry_date": "2026-07-06",
-                        "entry_price": 46.95,
                         "return": -15.0
                     },
                     {
@@ -5875,21 +5875,21 @@
                         "return": -15.0
                     },
                     {
-                        "code": "3564",
-                        "name": "其陽",
-                        "exchange": "TPEX",
-                        "industry": "櫃通訊網路",
-                        "entry_date": "2026-07-08",
-                        "entry_price": 56.1,
-                        "return": -15.0
-                    },
-                    {
                         "code": "6146",
                         "name": "耕興",
                         "exchange": "TPEX",
                         "industry": "櫃其他電子",
                         "entry_date": "2026-07-08",
                         "entry_price": 213.0,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "3564",
+                        "name": "其陽",
+                        "exchange": "TPEX",
+                        "industry": "櫃通訊網路",
+                        "entry_date": "2026-07-08",
+                        "entry_price": 56.1,
                         "return": -15.0
                     },
                     {
@@ -5965,15 +5965,6 @@
                         "return": -15.0
                     },
                     {
-                        "code": "1773",
-                        "name": "勝一",
-                        "exchange": "TWSE",
-                        "industry": "化學",
-                        "entry_date": "2026-07-15",
-                        "entry_price": 184.5,
-                        "return": -15.0
-                    },
-                    {
                         "code": "3551",
                         "name": "世禾",
                         "exchange": "TPEX",
@@ -5983,12 +5974,21 @@
                         "return": -15.0
                     },
                     {
-                        "code": "2467",
-                        "name": "志聖",
+                        "code": "1773",
+                        "name": "勝一",
                         "exchange": "TWSE",
-                        "industry": "電子零組件",
+                        "industry": "化學",
+                        "entry_date": "2026-07-15",
+                        "entry_price": 184.5,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "3178",
+                        "name": "公準",
+                        "exchange": "TPEX",
+                        "industry": "櫃半導體",
                         "entry_date": "2026-07-16",
-                        "entry_price": 620.0,
+                        "entry_price": 70.7,
                         "return": -15.0
                     },
                     {
@@ -6001,12 +6001,12 @@
                         "return": -15.0
                     },
                     {
-                        "code": "3178",
-                        "name": "公準",
-                        "exchange": "TPEX",
-                        "industry": "櫃半導體",
+                        "code": "2467",
+                        "name": "志聖",
+                        "exchange": "TWSE",
+                        "industry": "電子零組件",
                         "entry_date": "2026-07-16",
-                        "entry_price": 70.7,
+                        "entry_price": 620.0,
                         "return": -15.0
                     },
                     {
@@ -6028,21 +6028,21 @@
                         "return": -15.0
                     },
                     {
-                        "code": "1799",
-                        "name": "易威",
-                        "exchange": "TPEX",
-                        "industry": "櫃生技",
-                        "entry_date": "2026-07-24",
-                        "entry_price": 35.75,
-                        "return": -15.0
-                    },
-                    {
                         "code": "3669",
                         "name": "圓展",
                         "exchange": "TWSE",
                         "industry": "通訊網路",
                         "entry_date": "2026-07-24",
                         "entry_price": 40.7,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "1799",
+                        "name": "易威",
+                        "exchange": "TPEX",
+                        "industry": "櫃生技",
+                        "entry_date": "2026-07-24",
+                        "entry_price": 35.75,
                         "return": -15.0
                     },
                     {
@@ -6073,12 +6073,12 @@
                         "return": -15.0
                     },
                     {
-                        "code": "8436",
-                        "name": "大江",
-                        "exchange": "TPEX",
-                        "industry": "櫃生技",
+                        "code": "3704",
+                        "name": "合勤控",
+                        "exchange": "TWSE",
+                        "industry": "通訊網路",
                         "entry_date": "2026-08-10",
-                        "entry_price": 125.5,
+                        "entry_price": 50.4,
                         "return": -15.0
                     },
                     {
@@ -6091,12 +6091,12 @@
                         "return": -15.0
                     },
                     {
-                        "code": "3704",
-                        "name": "合勤控",
-                        "exchange": "TWSE",
-                        "industry": "通訊網路",
+                        "code": "8436",
+                        "name": "大江",
+                        "exchange": "TPEX",
+                        "industry": "櫃生技",
                         "entry_date": "2026-08-10",
-                        "entry_price": 50.4,
+                        "entry_price": 125.5,
                         "return": -15.0
                     },
                     {
@@ -6106,15 +6106,6 @@
                         "industry": "櫃電腦週邊",
                         "entry_date": "2026-08-11",
                         "entry_price": 434.5,
-                        "return": -15.0
-                    },
-                    {
-                        "code": "3230",
-                        "name": "錦明",
-                        "exchange": "TPEX",
-                        "industry": "櫃光電",
-                        "entry_date": "2026-08-14",
-                        "entry_price": 44.45,
                         "return": -15.0
                     },
                     {
@@ -6136,6 +6127,15 @@
                         "return": -15.0
                     },
                     {
+                        "code": "3230",
+                        "name": "錦明",
+                        "exchange": "TPEX",
+                        "industry": "櫃光電",
+                        "entry_date": "2026-08-14",
+                        "entry_price": 44.45,
+                        "return": -15.0
+                    },
+                    {
                         "code": "4416",
                         "name": "三圓",
                         "exchange": "TPEX",
@@ -6154,21 +6154,21 @@
                         "return": -15.0
                     },
                     {
-                        "code": "7777",
-                        "name": "能率亞洲",
-                        "exchange": "TPEX",
-                        "industry": "櫃其他",
-                        "entry_date": "2026-08-26",
-                        "entry_price": 41.5,
-                        "return": -15.0
-                    },
-                    {
                         "code": "5471",
                         "name": "松翰",
                         "exchange": "TWSE",
                         "industry": "半導體",
                         "entry_date": "2026-08-26",
                         "entry_price": 60.6,
+                        "return": -15.0
+                    },
+                    {
+                        "code": "7777",
+                        "name": "能率亞洲",
+                        "exchange": "TPEX",
+                        "industry": "櫃其他",
+                        "entry_date": "2026-08-26",
+                        "entry_price": 41.5,
                         "return": -15.0
                     },
                     {
@@ -6284,21 +6284,21 @@
                 ],
                 "bottom_3": [
                     {
-                        "code": "6143",
-                        "name": "振曜",
+                        "code": "4109",
+                        "name": "加捷生醫",
                         "exchange": "TPEX",
-                        "industry": "櫃通訊網路",
+                        "industry": "櫃生技",
                         "entry_date": "2026-07-03",
-                        "entry_price": 106.5,
+                        "entry_price": 12.8,
                         "return": -15.0
                     },
                     {
-                        "code": "5490",
-                        "name": "同亨",
+                        "code": "3663",
+                        "name": "鑫科",
                         "exchange": "TPEX",
-                        "industry": "櫃電腦週邊",
+                        "industry": "櫃其他電子",
                         "entry_date": "2026-07-03",
-                        "entry_price": 30.45,
+                        "entry_price": 88.4,
                         "return": -15.0
                     },
                     {
@@ -6317,21 +6317,21 @@
     "industry_flow": {
         "2026-10-13": {
             "無產業分類": -791.79,
-            "金融保險": 104.69,
-            "航運業": 87.56,
-            "塑膠工業": 45.02,
-            "電腦及週邊設備業": 24.59,
+            "金融保險": 104.73,
+            "航運業": 87.57,
+            "塑膠工業": 45.03,
+            "電腦及週邊設備業": 24.62,
             "鋼鐵工業": 4.97,
             "食品工業": 7.74,
             "運動休閒": 2.16,
             "化學生技醫療": 4.92,
-            "電子工業": -1165.49,
+            "電子工業": -1165.68,
             "汽車工業": 7.49,
             "油電燃氣業": 6.05,
             "電子通路業": 2.69,
             "水泥工業": -2.26,
-            "紡織纖維": 4.18,
-            "電子零組件業": -363.15,
+            "紡織纖維": 4.19,
+            "電子零組件業": -359.11,
             "通信網路業": 2.82,
             "橡膠工業": 0.76,
             "貿易百貨": 3.17,
@@ -6340,18 +6340,166 @@
             "光電業": -0.19,
             "半導體業": -19.26,
             "其他": 0.22,
+            "電機機械": -27.99,
             "玻璃陶瓷": -1.05,
             "其他電子業": -5.25,
             "觀光餐旅": 0.77,
-            "電機機械": -32.52,
             "化學工業": 0.4,
             "生技醫療業": -0.94,
-            "居家生活": 0.43,
+            "居家生活": 0.44,
             "電器電纜": -2.98,
             "創新板股票": 0.19,
             "數位雲端": 0.02,
             "綠能環保": 0.86,
             "存託憑證": -0.58
+        }
+    },
+    "industry_flow_adv": {
+        "2026-10-13": {
+            "無產業分類": {
+                "FI": -227.88,
+                "IT": -5.51
+            },
+            "金融保險": {
+                "FI": 84.74,
+                "IT": 11.02
+            },
+            "航運業": {
+                "FI": 68.67,
+                "IT": 17.02
+            },
+            "塑膠工業": {
+                "FI": 25.77,
+                "IT": 15.68
+            },
+            "電腦及週邊設備業": {
+                "FI": 14.21,
+                "IT": 7.28
+            },
+            "鋼鐵工業": {
+                "FI": 3.52,
+                "IT": 1.28
+            },
+            "食品工業": {
+                "FI": 5.08,
+                "IT": 1.96
+            },
+            "運動休閒": {
+                "FI": 2.2,
+                "IT": -0.04
+            },
+            "化學生技醫療": {
+                "FI": 4.42,
+                "IT": 0.48
+            },
+            "電子工業": {
+                "FI": -1383.26,
+                "IT": 220.43
+            },
+            "汽車工業": {
+                "FI": 7.45,
+                "IT": -0.02
+            },
+            "油電燃氣業": {
+                "FI": -10.26,
+                "IT": 16.38
+            },
+            "電子通路業": {
+                "FI": 0.83,
+                "IT": 1.35
+            },
+            "水泥工業": {
+                "FI": -1.94,
+                "IT": -0.06
+            },
+            "紡織纖維": {
+                "FI": 4.45,
+                "IT": -0.13
+            },
+            "電子零組件業": {
+                "FI": -267.7,
+                "IT": -61.58
+            },
+            "通信網路業": {
+                "FI": 2.27,
+                "IT": 0.15
+            },
+            "橡膠工業": {
+                "FI": 0.7,
+                "IT": -0.05
+            },
+            "貿易百貨": {
+                "FI": 3.21,
+                "IT": 0.0
+            },
+            "建材營造": {
+                "FI": 0.69,
+                "IT": -0.64
+            },
+            "造紙工業": {
+                "FI": 0.37,
+                "IT": 0.0
+            },
+            "光電業": {
+                "FI": -0.16,
+                "IT": 0.02
+            },
+            "半導體業": {
+                "FI": -9.98,
+                "IT": -2.13
+            },
+            "其他": {
+                "FI": 0.65,
+                "IT": -0.27
+            },
+            "電機機械": {
+                "FI": -38.68,
+                "IT": 16.25
+            },
+            "玻璃陶瓷": {
+                "FI": -0.79,
+                "IT": 0.03
+            },
+            "其他電子業": {
+                "FI": -6.69,
+                "IT": 1.98
+            },
+            "觀光餐旅": {
+                "FI": 0.79,
+                "IT": -0.0
+            },
+            "化學工業": {
+                "FI": 0.43,
+                "IT": 0.0
+            },
+            "生技醫療業": {
+                "FI": -0.65,
+                "IT": -0.09
+            },
+            "居家生活": {
+                "FI": 0.39,
+                "IT": 0.02
+            },
+            "電器電纜": {
+                "FI": -2.7,
+                "IT": -0.01
+            },
+            "創新板股票": {
+                "FI": 0.21,
+                "IT": 0.0
+            },
+            "數位雲端": {
+                "FI": 0.02,
+                "IT": 0.0
+            },
+            "綠能環保": {
+                "FI": 1.02,
+                "IT": 0.0
+            },
+            "存託憑證": {
+                "FI": -0.59,
+                "IT": 0.0
+            }
         }
     }
 }
