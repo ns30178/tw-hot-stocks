@@ -599,25 +599,47 @@ def main():
         
         print("📊 正在計算產業資金流向 (零 API 風險模式)...")
         industry_mapping, close_prices = get_industry_mapping_and_prices()
+        
+        # 原始變數 (不更動以確保相容)
         today_industry_flow = {}
+        # 【新增外掛變數】進階雙軌籌碼 (外資 vs 投信)
+        today_industry_flow_adv = {}
         
         for code, inst in inst_data.items():
             clean_code = str(code).strip()
             price = close_prices.get(clean_code, 0)
             if price > 0:
-                total_lots = inst.get("FI", 0) + inst.get("IT", 0) + inst.get("DL", 0)
-                net_amount_100m = (total_lots * price) / 100000
                 ind = industry_mapping.get(clean_code, "無產業分類")
                 
+                # 原始邏輯：加總外資(FI) + 投信(IT) + 自營商(DL)
+                total_lots = inst.get("FI", 0) + inst.get("IT", 0) + inst.get("DL", 0)
+                net_amount_100m = (total_lots * price) / 100000
                 if ind not in today_industry_flow:
                     today_industry_flow[ind] = 0
                 today_industry_flow[ind] += net_amount_100m
                 
+                # 【外掛邏輯】分離外資與投信，徹底屏除自營商雜訊
+                fi_amt = (inst.get("FI", 0) * price) / 100000
+                it_amt = (inst.get("IT", 0) * price) / 100000
+                if ind not in today_industry_flow_adv:
+                    today_industry_flow_adv[ind] = {"FI": 0.0, "IT": 0.0}
+                today_industry_flow_adv[ind]["FI"] += fi_amt
+                today_industry_flow_adv[ind]["IT"] += it_amt
+                
+        # 原始變數四捨五入處理
         for ind in list(today_industry_flow.keys()):
             today_industry_flow[ind] = round(today_industry_flow[ind], 2)
             if today_industry_flow[ind] == 0:
                 del today_industry_flow[ind]
                 
+        # 【外掛變數】四捨五入與空值清理
+        for ind in list(today_industry_flow_adv.keys()):
+            today_industry_flow_adv[ind]["FI"] = round(today_industry_flow_adv[ind]["FI"], 2)
+            today_industry_flow_adv[ind]["IT"] = round(today_industry_flow_adv[ind]["IT"], 2)
+            if today_industry_flow_adv[ind]["FI"] == 0 and today_industry_flow_adv[ind]["IT"] == 0:
+                del today_industry_flow_adv[ind]
+                
+        # 原始歷史紀錄推播
         industry_flow_history = old_json.get("industry_flow", {})
         if today_industry_flow:
             industry_flow_history[update_date_str] = today_industry_flow
@@ -626,6 +648,16 @@ def main():
         if len(sorted_dates) > 5:
             for d in sorted_dates[:-5]:
                 del industry_flow_history[d]
+
+        # 【外掛紀錄推播】儲存近 5 日的進階籌碼資料
+        industry_flow_adv_history = old_json.get("industry_flow_adv", {})
+        if today_industry_flow_adv:
+            industry_flow_adv_history[update_date_str] = today_industry_flow_adv
+            
+        sorted_dates_adv = sorted(industry_flow_adv_history.keys())
+        if len(sorted_dates_adv) > 5:
+            for d in sorted_dates_adv[:-5]:
+                del industry_flow_adv_history[d]
             
         results_intersection, results_original, results_ai = [], [], []
         print("⚙️ 執行多執行緒篩選策略...")
@@ -726,7 +758,8 @@ def main():
             },
             "previous_data": previous_data,
             "performance_stats": perf_stats,
-            "industry_flow": industry_flow_history
+            "industry_flow": industry_flow_history,
+            "industry_flow_adv": industry_flow_adv_history  # 【外掛寫入 JSON】
         }
 
         with open('daily_hot_stocks.json', 'w', encoding='utf-8') as f:
