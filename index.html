@@ -6,7 +6,6 @@
     <title>台股雙策略觀測站</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-    <!-- 引入 ECharts 用於繪製產業資金流向圖 -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <style>
         th { cursor: pointer; user-select: none; }
@@ -23,13 +22,12 @@
     </div>
 
     <!-- ========================================== -->
-    <!-- 【新增區塊】三大法人產業資金流向 (近 5 日) -->
+    <!-- 【升級區塊】主力與投信認養追蹤儀表板 -->
     <!-- ========================================== -->
     <div id="industry-flow-board" class="max-w-6xl mx-auto mb-10">
         <div class="bg-gray-900 text-white p-4 md:p-6 rounded-lg shadow-lg border border-gray-700">
             <h2 class="text-xl font-bold mb-2 border-l-4 border-blue-400 pl-3">三大法人產業資金流向 (近 5 日)</h2>
-            <p class="text-xs text-gray-400 mb-4 ml-4">追蹤外資、投信、自營商資金聚焦點，過濾大盤板塊風險。(單位: 億元)</p>
-            <!-- 裝載圖表的容器 -->
+            <p class="text-xs text-gray-400 mb-4 ml-4">追蹤外資(藍)與投信(紅)獨立動向，排除自營商雜訊。帶有 <span class="text-yellow-400 font-bold">🔥</span> 標籤代表今日有2檔以上共振進榜。(單位: 億元)</p>
             <div id="industry-flow-chart" class="w-full h-[400px]"></div>
         </div>
     </div>
@@ -53,11 +51,10 @@
         <div class="bg-gray-800 text-white p-4 md:p-6 rounded-lg shadow-lg">
             <h2 class="text-xl font-bold mb-4 border-l-4 border-yellow-400 pl-3">策略績效回測統計 (歷史進榜結算)</h2>
             <div id="stats-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                </div>
+            </div>
         </div>
     </div>
 
-    <!-- TradingView Modal (包含除錯顯示列) -->
     <div id="tv-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
         <div class="bg-gray-900 w-full max-w-5xl h-[80vh] rounded-lg shadow-2xl relative flex flex-col">
             <button onclick="closeModal()" class="absolute -top-4 -right-4 bg-red-600 text-white rounded-full w-10 h-10 text-xl font-bold border-2 border-white hover:bg-red-700 z-50">&times;</button>
@@ -66,9 +63,7 @@
         </div>
     </div>
 
-    <!-- 績效明細 Modal (已升級為微型復盤資料庫) -->
     <div id="details-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center p-4">
-        <!-- 將 max-w-2xl 改為 max-w-4xl，以容納更多欄位 -->
         <div class="bg-gray-800 w-full max-w-4xl max-h-[80vh] rounded-lg shadow-2xl relative flex flex-col">
             <button onclick="closeDetailsModal()" class="absolute -top-4 -right-4 bg-gray-600 text-white rounded-full w-10 h-10 text-xl font-bold border-2 border-white hover:bg-gray-700 z-50">&times;</button>
             <div class="p-4 border-b border-gray-700">
@@ -201,9 +196,6 @@
             `;
         }
 
-        // ==========================================
-        // 【修改點】升級版績效明細 Modal 渲染邏輯
-        // ==========================================
         function openDetailsModal(strategy, period) {
             const stats = window.globalStats;
             if (!stats || !stats[strategy] || !stats[strategy][period] || !stats[strategy][period].details) {
@@ -221,7 +213,6 @@
                 const colorClass = isPos ? 'text-red-400' : (isZero ? 'text-gray-300' : 'text-green-400');
                 const sign = isPos ? '+' : '';
                 
-                // 【向下相容防護】如果讀取到舊版 JSON，自動塞入預設值避免破圖
                 const stockName = item.name && item.name !== '-' ? item.name : '';
                 const exchange = item.exchange || 'TWSE';
                 const industry = item.industry || '-';
@@ -313,9 +304,9 @@
         }
 
         // ==========================================
-        // 【新增功能】渲染產業資金流向圖表 (ECharts)
+        // 【無損旁支擴充】升級版產業資金流向圖表渲染邏輯
         // ==========================================
-        function renderIndustryFlowChart(flowData) {
+        function renderIndustryFlowChart(flowData, flowDataAdv, latestData) {
             const chartDom = document.getElementById('industry-flow-chart');
             
             if (!flowData || Object.keys(flowData).length === 0) {
@@ -323,99 +314,209 @@
                 return;
             }
 
-            // 1. 加總所有日期的產業資金
-            let aggregateData = {};
-            for (let date in flowData) {
-                for (let ind in flowData[date]) {
-                    if (ind === "無產業分類") continue; // 略過無分類標的
-                    if (!aggregateData[ind]) aggregateData[ind] = 0;
-                    aggregateData[ind] += flowData[date][ind];
-                }
-            }
+            // --- 1. 計算「族群群聚 (🔥)」標籤 ---
+            let industryCounts = {};
+            if (latestData) {
+                const combined = [...(latestData.original_strategy || []), ...(latestData.ai_strategy || [])];
+                // 扣除交集策略可能造成的重複標的
+                const uniqueStocks = Array.from(new Set(combined.map(s => s['股票代號'])))
+                    .map(code => combined.find(s => s['股票代號'] === code));
 
-            // 2. 轉換為陣列並排序
-            let dataArray = [];
-            for (let ind in aggregateData) {
-                dataArray.push({ name: ind, value: parseFloat(aggregateData[ind].toFixed(2)) });
-            }
-            
-            // 排序：金額大的在前面
-            dataArray.sort((a, b) => b.value - a.value);
-
-            // 3. 取 Top 5 淨流入與 Top 5 淨流出
-            let topInflows = dataArray.filter(d => d.value > 0).slice(0, 5);
-            let topOutflows = dataArray.filter(d => d.value < 0).slice(-5).reverse(); // 流出量最大的放前面
-
-            // 為了讓雙向圖表好看，把流出接在流入後面
-            let finalData = [...topInflows, ...topOutflows];
-            
-            // ECharts 長條圖是由下往上畫，所以我們要反轉陣列，讓第一名在最上面
-            finalData.reverse();
-
-            if (finalData.length === 0) {
-                chartDom.innerHTML = `<div class="flex items-center justify-center h-full text-gray-400">近 5 日無顯著產業資金流動。</div>`;
-                return;
-            }
-
-            let yAxisData = finalData.map(item => item.name);
-            let seriesData = finalData.map(item => {
-                return {
-                    value: item.value,
-                    itemStyle: { color: item.value > 0 ? '#f87171' : '#34d399' } // 紅漲綠跌
-                }
-            });
-
-            const myChart = echarts.init(chartDom);
-            const option = {
-                tooltip: {
-                    trigger: 'axis',
-                    axisPointer: { type: 'shadow' },
-                    formatter: function (params) {
-                        let val = params[0].value;
-                        let sign = val > 0 ? '淨流入' : '淨提款';
-                        return `${params[0].name}<br/>${sign}：<b>${Math.abs(val)}</b> 億元`;
+                uniqueStocks.forEach(s => {
+                    let ind = s['產業分類'];
+                    if (ind && ind !== '—' && ind !== '無產業分類') {
+                        industryCounts[ind] = (industryCounts[ind] || 0) + 1;
                     }
-                },
-                grid: { top: 20, bottom: 20, left: 100, right: 30 },
-                xAxis: {
-                    type: 'value',
-                    position: 'bottom',
-                    splitLine: { lineStyle: { type: 'dashed', color: '#374151' } },
-                    axisLabel: { color: '#9ca3af' }
-                },
-                yAxis: {
-                    type: 'category',
-                    axisLine: { show: false },
-                    axisLabel: { show: true, color: '#e5e7eb', fontSize: 13, fontWeight: 'bold' },
-                    axisTick: { show: false },
-                    splitLine: { show: false },
-                    data: yAxisData
-                },
-                series: [
-                    {
-                        name: '資金淨動向 (億)',
-                        type: 'bar',
-                        data: seriesData,
-                        label: {
-                            show: true,
-                            position: 'inside',
-                            formatter: '{c} 億',
-                            color: '#1f2937',
+                });
+            }
+
+            // 只要進榜2檔以上，掛上火焰標籤
+            const getIndustryLabel = (ind) => {
+                return (industryCounts[ind] >= 2) ? `${ind} 🔥` : ind;
+            };
+
+            // --- 2. 判斷是否有進階資料 (外資與投信分離) ---
+            if (flowDataAdv && Object.keys(flowDataAdv).length > 0) {
+                let aggFI = {};
+                let aggIT = {};
+
+                for (let date in flowDataAdv) {
+                    for (let ind in flowDataAdv[date]) {
+                        if (ind === "無產業分類") continue;
+                        aggFI[ind] = (aggFI[ind] || 0) + flowDataAdv[date][ind].FI;
+                        aggIT[ind] = (aggIT[ind] || 0) + flowDataAdv[date][ind].IT;
+                    }
+                }
+
+                // 轉為陣列，並以「投信(IT)」認養為排序核心，過濾大型權值股雜訊
+                let dataArray = Object.keys(aggIT).map(ind => ({
+                    name: ind,
+                    fi: parseFloat(aggFI[ind].toFixed(2)),
+                    it: parseFloat(aggIT[ind].toFixed(2))
+                }));
+
+                dataArray.sort((a, b) => b.it - a.it);
+
+                // 取投信買超前 6 名與賣超前 4 名 (避開全被外資提款股佔據版面)
+                let topInflows = dataArray.filter(d => d.it > 0).slice(0, 6);
+                let topOutflows = dataArray.filter(d => d.it < 0).slice(-4).reverse();
+
+                let finalData = [...topInflows, ...topOutflows];
+                finalData.reverse(); 
+
+                if (finalData.length === 0) {
+                    chartDom.innerHTML = `<div class="flex items-center justify-center h-full text-gray-400">近 5 日無顯著投信資金流動。</div>`;
+                    return;
+                }
+
+                let yAxisData = finalData.map(item => getIndustryLabel(item.name));
+                let fiSeries = finalData.map(item => item.fi);
+                let itSeries = finalData.map(item => item.it);
+
+                const myChart = echarts.init(chartDom);
+                const option = {
+                    tooltip: {
+                        trigger: 'axis',
+                        axisPointer: { type: 'shadow' },
+                        formatter: function (params) {
+                            let indName = params[0].name.replace(' 🔥', '');
+                            let hasFire = params[0].name.includes('🔥');
+                            let fireTag = hasFire ? '<span style="color:#fbbf24;font-weight:bold;"> 🔥(族群發動)</span>' : '';
+                            
+                            let res = `<b>${indName}</b>${fireTag}<br/>`;
+                            params.forEach(p => {
+                                let sign = p.value > 0 ? '+' : '';
+                                let color = p.seriesName.includes('外資') ? '#3b82f6' : '#f43f5e';
+                                res += `<span style="color:${color};font-weight:bold;">${p.seriesName}</span> : ${sign}${p.value} 億<br/>`;
+                            });
+                            return res;
+                        }
+                    },
+                    legend: {
+                        data: ['外資 (億)', '投信 (億)'],
+                        textStyle: { color: '#9ca3af', fontWeight: 'bold' },
+                        top: 0
+                    },
+                    grid: { top: 30, bottom: 20, left: 115, right: 30 },
+                    xAxis: {
+                        type: 'value',
+                        splitLine: { lineStyle: { type: 'dashed', color: '#374151' } },
+                        axisLabel: { color: '#9ca3af' }
+                    },
+                    yAxis: {
+                        type: 'category',
+                        data: yAxisData,
+                        axisLabel: {
+                            formatter: function (value) {
+                                return value;
+                            },
+                            color: function (value) {
+                                return value.includes('🔥') ? '#fbbf24' : '#e5e7eb';
+                            },
                             fontWeight: 'bold',
                             fontSize: 12
+                        },
+                        axisLine: { show: false },
+                        axisTick: { show: false }
+                    },
+                    series: [
+                        {
+                            name: '外資 (億)',
+                            type: 'bar',
+                            data: fiSeries,
+                            itemStyle: { color: '#3b82f6' }
+                        },
+                        {
+                            name: '投信 (億)',
+                            type: 'bar',
+                            data: itSeries,
+                            itemStyle: { color: '#f43f5e' }
                         }
-                    }
-                ]
-            };
-            myChart.setOption(option);
-            
-            // 讓圖表隨視窗大小縮放
-            window.addEventListener('resize', function() {
-                myChart.resize();
-            });
-            }
+                    ]
+                };
+                myChart.setOption(option);
+                window.addEventListener('resize', () => myChart.resize());
 
-            function openModal(exchange, code) {
+            } else {
+                // --- 降級相容機制：如果沒有進階資料，退回舊版單一長條圖繪製邏輯 ---
+                let aggregateData = {};
+                for (let date in flowData) {
+                    for (let ind in flowData[date]) {
+                        if (ind === "無產業分類") continue;
+                        if (!aggregateData[ind]) aggregateData[ind] = 0;
+                        aggregateData[ind] += flowData[date][ind];
+                    }
+                }
+
+                let dataArray = [];
+                for (let ind in aggregateData) {
+                    dataArray.push({ name: ind, value: parseFloat(aggregateData[ind].toFixed(2)) });
+                }
+                dataArray.sort((a, b) => b.value - a.value);
+
+                let topInflows = dataArray.filter(d => d.value > 0).slice(0, 5);
+                let topOutflows = dataArray.filter(d => d.value < 0).slice(-5).reverse();
+
+                let finalData = [...topInflows, ...topOutflows];
+                finalData.reverse();
+
+                if (finalData.length === 0) {
+                    chartDom.innerHTML = `<div class="flex items-center justify-center h-full text-gray-400">近 5 日無顯著產業資金流動。</div>`;
+                    return;
+                }
+
+                let yAxisData = finalData.map(item => getIndustryLabel(item.name));
+                let seriesData = finalData.map(item => {
+                    return {
+                        value: item.value,
+                        itemStyle: { color: item.value > 0 ? '#f87171' : '#34d399' }
+                    }
+                });
+
+                const myChart = echarts.init(chartDom);
+                const option = {
+                    tooltip: {
+                        trigger: 'axis',
+                        axisPointer: { type: 'shadow' },
+                        formatter: function (params) {
+                            let val = params[0].value;
+                            let sign = val > 0 ? '淨流入' : '淨提款';
+                            let fireTag = params[0].name.includes('🔥') ? ' (族群發動)' : '';
+                            return `${params[0].name.replace(' 🔥', '')}${fireTag}<br/>${sign}：<b>${Math.abs(val)}</b> 億元`;
+                        }
+                    },
+                    grid: { top: 20, bottom: 20, left: 115, right: 30 },
+                    xAxis: {
+                        type: 'value',
+                        splitLine: { lineStyle: { type: 'dashed', color: '#374151' } },
+                        axisLabel: { color: '#9ca3af' }
+                    },
+                    yAxis: {
+                        type: 'category',
+                        data: yAxisData,
+                        axisLabel: {
+                            color: function (value) { return value.includes('🔥') ? '#fbbf24' : '#e5e7eb'; },
+                            fontWeight: 'bold',
+                            fontSize: 12
+                        },
+                        axisLine: { show: false },
+                        axisTick: { show: false }
+                    },
+                    series: [
+                        {
+                            name: '資金淨動向 (億)',
+                            type: 'bar',
+                            data: seriesData,
+                            label: { show: true, position: 'inside', formatter: '{c} 億', color: '#1f2937', fontWeight: 'bold', fontSize: 12 }
+                        }
+                    ]
+                };
+                myChart.setOption(option);
+                window.addEventListener('resize', () => myChart.resize());
+            }
+        }
+
+        function openModal(exchange, code) {
             let validExchange = exchange;
             
             if (!validExchange || validExchange === 'undefined' || validExchange === 'null') {
@@ -471,9 +572,9 @@
                 
                 renderPerformance(data.performance_stats);
                 
-                // 【新增呼叫】渲染產業資金流向圖表
+                // 【修改呼叫】掛載進階版資料與今日清單，以渲染出最新圖表
                 if(data.industry_flow) {
-                    renderIndustryFlowChart(data.industry_flow);
+                    renderIndustryFlowChart(data.industry_flow, data.industry_flow_adv, data.latest_data);
                 }
 
                 if(data.latest_data) {
